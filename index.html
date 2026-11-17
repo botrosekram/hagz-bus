@@ -47,6 +47,7 @@ details{border-top:1px solid var(--line);padding:6px 0}summary{cursor:pointer;fo
 .stt{font-size:12px;border-radius:99px;padding:1px 10px;font-weight:700;background:var(--go);color:#fff}.stt.going{background:var(--amb);color:#0F2A2E}.stt.closed,.stt.done{background:#8a9893}
 .ctl{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:12px}.ctl button{padding:12px 8px}
 .lk{display:flex;gap:8px;margin-top:10px}.lk input{margin:0;direction:ltr;font-size:13px}.lk button{white-space:nowrap}
+.sh{font-weight:700;padding:8px 0 2px;color:var(--go)}.sh.w{color:#b57e00;border-top:2px dashed var(--line);margin-top:8px;padding-top:10px}
 .two{display:grid;grid-template-columns:1fr;gap:0}@media(min-width:900px){.two{grid-template-columns:1fr 1fr;gap:14px}}
 </style></head><body>
 <header><div class="in"><a href="#/" class="brand">🚐 حجز العربة</a></div></header>
@@ -58,8 +59,8 @@ details{border-top:1px solid var(--line);padding:6px 0}summary{cursor:pointer;fo
 <div id="toast" role="status"></div>
 <script>
 /* ===== بيانات Supabase (Project URL + Publishable/anon key) ===== */
-const SUPABASE_URL='https://pabvyydctwwufmiecmzc.supabase.co';
-const SUPABASE_ANON_KEY='sb_publishable_b6mILrA24y6WDle98R-UHw_mWtdJw9o';
+const SUPABASE_URL = 'https://pabvyydctwwufmiecmzc.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_b6mILrA24y6WDle98R-UHw_mWtdJw9o';
 /* ================================================================= */
 const $=i=>document.getElementById(i),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const sb=SUPABASE_URL?supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY):null;
@@ -73,6 +74,8 @@ const R=()=>location.hash.replace(/^#\/?/,'').split('/').filter(Boolean),go=p=>{
 const curCar=()=>{const r=R();return r[0]==='car'?CARS[0]:(r[0]==='admin'&&r[1]==='car'?CARS.find(c=>c.id===+r[2]):null)};
 const linkT=t=>location.href.split('#')[0]+'#/car/'+t;
 const STL={open:'متاحة',closed:'مغلقة',going:'في رحلة',done:'منتهية'};
+const capOf=c=>c.capacity==null?Infinity:c.capacity;let skew=0;
+const opened=c=>!c.book_at||Date.now()+skew>=Date.parse(c.book_at);
 async function copy(t){try{await navigator.clipboard.writeText(t);toast('تم نسخ الرابط')}catch(e){prompt('انسخ الرابط',t)}}
 /* ---- وقت 12 ساعة ---- */
 const t12=s=>{if(!s)return'';let[h,m]=s.split(':').map(Number);const ap=h>=12?'م':'ص';h=h%12||12;return h+':'+String(m).padStart(2,'0')+' '+ap};
@@ -81,9 +84,12 @@ const to24=(h,m,ap)=>ap?String((+h%12)+(ap==='م'?12:0)).padStart(2,'0')+':'+Str
 const from24=s=>{if(!s)return{h:7,m:0,ap:''};const[h,m]=s.split(':').map(Number);return{h:h%12||12,m:(Math.round(m/5)*5)%60,ap:h>=12?'م':'ص'}};
 const bt=iso=>{const d=new Date(iso),z='Africa/Cairo',day=x=>x.toLocaleDateString('en-CA',{timeZone:z});
  const t=new Intl.DateTimeFormat('en-US',{timeZone:z,hour:'numeric',minute:'2-digit',hour12:true}).format(d).replace('AM','ص').replace('PM','م');
- const n=new Date(),y=new Date(n.getTime()-864e5),dd=day(d);
- const lb=dd===day(n)?'اليوم':dd===day(y)?'امبارح':new Intl.DateTimeFormat('en-GB',{timeZone:z,day:'numeric',month:'numeric'}).format(d);
+ const n=new Date(),y=new Date(n.getTime()-864e5),tm=new Date(n.getTime()+864e5),dd=day(d);
+ const lb=dd===day(n)?'اليوم':dd===day(y)?'امبارح':dd===day(tm)?'بكرة':new Intl.DateTimeFormat('en-GB',{timeZone:z,day:'numeric',month:'numeric'}).format(d);
  return lb+' '+t};
+const cz=iso=>Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'Africa/Cairo',hourCycle:'h23',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}).formatToParts(new Date(iso)).map(x=>[x.type,x.value]));
+const cairoToIso=(d,t)=>{const g=new Date(d+'T'+t+':00Z'),p=cz(g);return new Date(g.getTime()-(Date.UTC(+p.year,+p.month-1,+p.day,+p.hour,+p.minute)-g.getTime())).toISOString()};
+const isoToCairo=iso=>{if(!iso)return{d:'',t:''};const p=cz(iso);return{d:p.year+'-'+p.month+'-'+p.day,t:p.hour+':'+p.minute}};
 function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display='none',4500)}
 
 /* ---- الدخول والبيانات ---- */
@@ -94,11 +100,11 @@ function logout(){const r=R();if(role==='admin')ssDel('adm');else if(r[0]==='car
 async function rpc(fn,args,ok){const {data,error}=await sb.rpc(fn,args);
  if(error){toast(error.message);if(error.message.includes('كلمة المرور غير صحيحة'))logout();return null}
  if(ok)toast(ok);await load();return {data}}
-const confIds=()=>CARS.flatMap(c=>carB(c).slice(0,c.capacity).map(x=>x.id));
+const confIds=()=>CARS.flatMap(c=>carB(c).slice(0,capOf(c)).map(x=>x.id));
 async function load(){if(!sb)return;const r=R();
  const s=await sb.from('stops').select('*');if(s.error){$('app').innerHTML='<div class="card">تعذر الاتصال بقاعدة البيانات. تأكد من الإعدادات وإنك شغّلت setup.sql.</div>';return}ST=s.data;
- if(r[0]==='car'){const {data,error}=await sb.rpc('car_view',{p_token:r[1]});if(error){toast(error.message);return}CARS=data?[data.car]:[];B=data?data.bookings:[];GR=[]}
- else if(r[0]==='admin'&&role==='admin'){const {data,error}=await sb.rpc('admin_data',{pw:PW});if(error){logout();return}CARS=data.cars;GR=data.groups;B=data.bookings}
+ if(r[0]==='car'){const {data,error}=await sb.rpc('car_view',{p_token:r[1]});if(error){toast(error.message);return}CARS=data?[data.car]:[];B=data?data.bookings:[];GR=[];if(data)skew=Date.parse(data.now)-Date.now()}
+ else if(r[0]==='admin'&&role==='admin'){const {data,error}=await sb.rpc('admin_data',{pw:PW});if(error){logout();return}CARS=data.cars;GR=data.groups;B=data.bookings;skew=Date.parse(data.now)-Date.now()}
  else{CARS=[];B=[];GR=[]}
  const nc=role&&curCar();notes={};
  if(nc){const n=await sb.rpc('staff_notes',{pw:PW,p_car:nc.id});if(n.error){logout();return}n.data.forEach(x=>notes[x.booking_id]=x.note)}
@@ -109,19 +115,23 @@ async function load(){if(!sb)return;const r=R();
 
 /* ---- مكونات مشتركة ---- */
 const banner=c=>{const dp=c.depart?' - موعد الانطلاق '+t12(c.depart):'',cs=P().find(s=>s.ord===c.cur);
- return c.status==='open'?'الحجز مفتوح - الرحلة لم تبدأ بعد'+dp:c.status==='closed'?'الحجز مقفول'+dp:c.status==='going'?'السائق بدأ الرحلة - العربة دلوقتي عند: '+(cs?cs.name:'—')+dp:'انتهت الرحلة'};
+ return c.status==='open'?(opened(c)?'الحجز مفتوح - الرحلة لم تبدأ بعد'+dp:'⏳ الحجز لسه مفتحش - هيفتح '+bt(c.book_at)+dp):c.status==='closed'?'الحجز مقفول'+dp:c.status==='going'?'السائق بدأ الرحلة - العربة دلوقتي عند: '+(cs?cs.name:'—')+dp:'انتهت الرحلة'};
 function metroHtml(c,conf){const PS=P(),going=c.status==='going'||c.status==='done';
  const o=conf.filter(x=>!x.stop_id).length;
  return '<ol class="m">'+PS.map((s,i)=>{const k=conf.filter(x=>x.stop_id===s.id).length,cl=c.status==='done'||(going&&c.cur>s.ord)?'p':(going&&c.cur===s.ord?'c':'');
   return `<li class="${cl}"><span class="dot">${i+1}</span><div class="nm"><span>${cl==='c'?'<b>'+esc(s.name)+'</b>':esc(s.name)}</span>${k?`<span class="chip">${k} صعود</span>`:''}</div></li>`}).join('')+'</ol>'+(o?`<p class="mut sm">+ ${o} راكب بأماكن ركوب مكتوبة بالوصف (شوف القايمة)</p>`:'')}
-function cntHtml(c,conf,w){return `<div class="cnt"><div><b>${conf.length}</b>مؤكد من ${c.capacity}</div><div><b>${w}</b>احتياطي</div><div><b>${Math.max(0,c.capacity-conf.length)}</b>مقاعد فاضية</div></div>`}
-function rowsHtml(c,bs,staff){const cap=c.capacity,open=c.status==='open';
- return bs.length?bs.map((x,i)=>{const m=x.id in mine;
+function cntHtml(c,conf,w){return c.capacity==null?`<div class="cnt"><div><b>${conf.length}</b>عدد الحاجزين (غير محدود)</div></div>`:`<div class="cnt"><div><b>${conf.length}</b>مؤكد من ${c.capacity}</div><div><b>${w}</b>احتياطي</div><div><b>${Math.max(0,c.capacity-conf.length)}</b>مقاعد فاضية</div></div>`}
+function rowsHtml(c,bs,staff){const cap=capOf(c),open=c.status==='open';
+ const row=(x,i)=>{const m=x.id in mine;
   const nt=staff&&notes[x.id]?`<small>📝 ${esc(notes[x.id])}</small>`:(m&&mine[x.id].n?'<small>📝 ملاحظتك اتبعتت للسائق</small>':'');
   const act=(staff?`<button data-a="edit" data-i="${x.id}">تعديل</button><button data-a="up" data-i="${x.id}" aria-label="أعلى">↑</button><button data-a="dn" data-i="${x.id}" aria-label="أسفل">↓</button><button data-a="del" data-i="${x.id}" aria-label="حذف">✕</button>`:'')
    +(m&&open?`<button data-a="note" data-i="${x.id}" aria-label="ملاحظة">✏️</button>`+(staff?'':`<button data-a="cancel" data-i="${x.id}">إلغاء</button>`):'');
   const from=x.stop_id?esc(nm(x.stop_id)):'📍 '+esc(x.pickup_text||'—');
-  return `<div class="row"><span class="no ${i<cap?'':'w'}">${i+1}</span><div class="t">${esc(x.name)}${m?' (أنت)':''}<small>${i<cap?'مؤكد':'احتياطي رقم '+(i-cap+1)} - من ${from} إلى ${esc(x.drop_name||'—')}</small>${x.created_at?`<small>🕒 وقت الحجز: ${bt(x.created_at)}</small>`:''}${nt}</div><div class="a">${act}</div></div>`}).join(''):'<p class="mut">مفيش حجوزات لسه على العربة دي.</p>'}
+  return `<div class="row"><span class="no ${i<cap?'':'w'}">${i+1}</span><div class="t">${esc(x.name)}${m?' (أنت)':''}<small>${i<cap?(cap===Infinity?'محجوز':'مؤكد'):'احتياطي رقم '+(i-cap+1)} - من ${from} إلى ${esc(x.drop_name||'—')}</small>${x.created_at?`<small>🕒 وقت الحجز: ${bt(x.created_at)}</small>`:''}${nt}</div><div class="a">${act}</div></div>`};
+ if(!bs.length)return '<p class="mut">مفيش حجوزات لسه على العربة دي.</p>';
+ const n=Math.min(bs.length,cap),all=bs.map(row);
+ return (cap===Infinity?'':`<div class="sh">✅ المقاعد المؤكدة (${n} من ${cap}) - بالأسبق في الحجز</div>`)+all.slice(0,n).join('')
+  +(bs.length>n?`<div class="sh w">⏳ قائمة الاحتياطي (${bs.length-n}) - بتتأكد تلقائي لو حد اعتذر</div>`+all.slice(n).join(''):'')}
 function sumHtml(c,conf){const oth=conf.filter(x=>!x.stop_id);
  return P().map((p,i)=>{const l=conf.filter(x=>x.stop_id===p.id);return `<details ${l.length?'open':''}><summary>${i+1}. ${esc(p.name)} - ${l.length} راكب</summary>${l.map(x=>`<div>${esc(x.name)} ← ${esc(x.drop_name||'—')}${notes[x.id]?' - 📝 '+esc(notes[x.id]):''}</div>`).join('')||'<div class="mut">لا أحد</div>'}</details>`}).join('')
  +(oth.length?`<details open><summary>📍 أماكن أخرى (بالوصف) - ${oth.length} راكب</summary>${oth.map(x=>`<div>${esc(x.name)} - ${esc(x.pickup_text||'')} ← ${esc(x.drop_name||'—')}${notes[x.id]?' - 📝 '+esc(notes[x.id]):''}</div>`).join('')}</details>`:'')}
@@ -166,30 +176,30 @@ function updHome(){const h=$('hm');if(!h)return;
 function updCar(){if(!$('cbn'))return;
  if(!loaded){$('cbn').innerHTML='<p class="mut">جارٍ التحميل…</p>';return}
  const c=CARS[0];if(!c){$('app').innerHTML=notFound();render.k='';return}
- fillSel();const bs=carB(c),conf=bs.slice(0,c.capacity),g=grp(c);
+ fillSel();const bs=carB(c),conf=bs.slice(0,capOf(c)),g=grp(c);
  $('cbn').innerHTML=`<h1>${esc(c.name)} ${g?`<span class="tag">${esc(g.name)}</span>`:''}</h1>${c.details?`<p class="mut">${esc(c.details)}</p>`:''}<div class="ban${c.status==='going'?' g':''}" aria-live="polite">${esc(banner(c))}</div>`;
- $('cnt').innerHTML=cntHtml(c,conf,bs.length-conf.length);$('fm').hidden=c.status!=='open';
+ $('cnt').innerHTML=cntHtml(c,conf,bs.length-conf.length);$('fm').hidden=!(c.status==='open'&&opened(c));clearTimeout(updCar.t);if(c.status==='open'&&c.book_at&&!opened(c))updCar.t=setTimeout(load,Math.min(Date.parse(c.book_at)-(Date.now()+skew)+400,2147000000));
  $('drv').innerHTML=role?`<div class="card"><b>${role==='admin'?'تحكم المسؤول':'لوحة السائق'}</b>${ctlHtml(c,false)}${role==='admin'?`<div style="margin-top:10px"><button data-a="go" data-p="admin/car/${c.id}">فتح في لوحة التحكم الكاملة</button></div>`:''}</div>`:'';
  $('mt').innerHTML=metroHtml(c,conf);$('list').innerHTML=rowsHtml(c,bs,!!role);
  $('sm').innerHTML=role?`<div class="card"><b>كشف الركاب بالمحطات</b>${sumHtml(c,conf)}</div>`:'';
  $('ft').innerHTML=role?`<button data-a="out">تسجيل خروج (${role==='admin'?'مسؤول':'سائق'})</button>`:'<button data-a="dlogin" class="mut">دخول السائق</button>'}
-async function doBook(){const c=CARS[0];if(!c)return;
+async function doBook(){const c=CARS[0];if(!c)return;if(c.status!=='open'||!opened(c))return toast('الحجز لسه مفتحش');
  const n=$('nm').value.trim(),sv=$('st').value,pt=$('pko').value.trim(),dv=$('dr').value,drop=dv==='other'?$('dro').value.trim():dv;
  if(n.length<2)return toast('اكتب اسمك الأول');if(!sv)return toast('اختار محطة الركوب');
  if(sv==='other'&&pt.length<3)return toast('اكتب وصف مكانك (الشارع / العمارة)');if(drop.length<2)return toast('اختار محطة النزول أو اكتبها');
  const r=await rpc('book',{p_token:R()[1],p_name:n,p_stop:sv==='other'?0:+sv,p_pick:sv==='other'?pt:'',p_drop:drop});if(!r)return;
  mine[r.data.id]={s:r.data.secret,n:''};saveMine();$('nm').value='';$('pko').value='';$('dro').value='';
- const pos=carB(c).findIndex(x=>x.id===r.data.id)+1;toast(pos<=c.capacity?`تم حجزك، رقمك ${pos}`:`العربة مكتملة، انت احتياطي رقم ${pos-c.capacity}`)}
+ const pos=carB(c).findIndex(x=>x.id===r.data.id)+1;toast(pos<=capOf(c)?`تم حجزك، رقمك ${pos}`:`العربة مكتملة، انت احتياطي رقم ${pos-capOf(c)}`)}
 
 /* ---- لوحة المسؤول ---- */
-function carCard(c){const bs=carB(c),conf=Math.min(bs.length,c.capacity),w=Math.max(0,bs.length-c.capacity),p=Math.round(conf/c.capacity*100),g=grp(c),cs=P().find(s=>s.ord===c.cur);
+function carCard(c){const bs=carB(c),cp=capOf(c),conf=Math.min(bs.length,cp),w=Math.max(0,bs.length-cp),p=cp===Infinity?0:Math.round(conf/cp*100),g=grp(c),cs=P().find(s=>s.ord===c.cur),wait=c.status==='open'&&!opened(c);
  return `<article class="cc ${c.status}" data-a="opencar" data-i="${c.id}" tabindex="0" role="button"><div class="ct"><b>${esc(c.name)}</b>${g?`<span class="tag">${esc(g.name)}</span>`:''}</div>
- ${c.details?`<div class="mut sm">${esc(c.details)}</div>`:''}<div class="bar"><i style="width:${p}%"></i></div>
- <div class="sm">${conf}/${c.capacity} مقعد${w?' - احتياطي '+w:''}</div>
- <div class="sm mut">${c.depart?'🕒 '+t12(c.depart):''}${c.status==='going'&&cs?' - عند: '+esc(cs.name):''}</div>
+ ${c.details?`<div class="mut sm">${esc(c.details)}</div>`:''}${cp===Infinity?'':`<div class="bar"><i style="width:${p}%"></i></div>`}
+ <div class="sm">${cp===Infinity?bs.length+' حاجز (غير محدودة العدد)':conf+'/'+cp+' مقعد'+(w?' - احتياطي '+w:'')}</div>
+ <div class="sm mut">${c.depart?'🕒 '+t12(c.depart):''}${wait?' - ⏳ الحجز يفتح '+bt(c.book_at):''}${c.status==='going'&&cs?' - عند: '+esc(cs.name):''}</div>
  <div class="cb"><button data-a="opencar" data-i="${c.id}">فتح والتحكم</button><button data-a="copy" data-i="${c.id}">🔗 رابط</button></div></article>`}
 function updDash(){const d=$('ad');if(!d)return;if(!loaded){d.innerHTML='<p class="mut">جارٍ التحميل…</p>';return}
- const cnf=c=>Math.min(carB(c).length,c.capacity),wt=c=>Math.max(0,carB(c).length-c.capacity);
+ const cnf=c=>Math.min(carB(c).length,capOf(c)),wt=c=>Math.max(0,carB(c).length-capOf(c));
  const ac=CARS.filter(c=>filt==='all'||(filt==='none'?!grp(c):c.group_id===+filt));
  const secs=[['🟢 عربات متاحة للحجز',ac.filter(c=>c.status==='open')],['🔒 عربات مغلقة / منتهية',ac.filter(c=>c.status==='closed'||c.status==='done')],['🚌 رحلات جارية الآن',ac.filter(c=>c.status==='going')]];
  const nOpen=CARS.filter(c=>c.status==='open').length,nClosed=CARS.filter(c=>c.status==='closed'||c.status==='done').length,nGo=CARS.filter(c=>c.status==='going').length,nNone=CARS.filter(c=>!grp(c)).length;
@@ -201,10 +211,10 @@ function updDash(){const d=$('ad');if(!d)return;if(!loaded){d.innerHTML='<p clas
  +secs.map(s=>`<details class="sec" open><summary>${s[0]} <span class="tag">${s[1].length}</span></summary><div class="gr">${s[1].map(carCard).join('')||'<p class="mut">لا توجد عربات هنا.</p>'}</div></details>`).join('')}
 function updAdminCar(){const d=$('app');if(!loaded)return;const c=curCar();
  if(!c){d.innerHTML=notFound();render.k='';return}
- const bs=carB(c),conf=bs.slice(0,c.capacity),w=bs.length-conf.length,g=grp(c),s=c.status;
+ const bs=carB(c),conf=bs.slice(0,capOf(c)),w=bs.length-conf.length,g=grp(c),s=c.status;
  d.innerHTML=`<div><button data-a="go" data-p="admin">← لوحة التحكم</button></div>
  <div class="card"><div class="ct"><h1>${esc(c.name)}</h1><span class="stt ${s}">${STL[s]}</span></div>
- <div class="mut sm">${g?esc(g.name)+' - ':''}${c.capacity} مقعد${c.depart?' - 🕒 '+t12(c.depart):''}</div>${c.details?`<p>${esc(c.details)}</p>`:''}
+ <div class="mut sm">${g?esc(g.name)+' - ':''}${c.capacity==null?'غير محدودة العدد':c.capacity+' مقعد'}${c.depart?' - 🕒 '+t12(c.depart):''}${c.book_at?' - ⏳ الحجز يفتح '+bt(c.book_at):''}</div>${c.details?`<p>${esc(c.details)}</p>`:''}
  <div class="lk"><input readonly value="${esc(linkT(c.token))}" aria-label="رابط العربة"><button data-a="copy" data-i="${c.id}">نسخ الرابط</button></div>
  <p class="mut sm" style="margin:6px 0 0">الرابط ده + باسورد السائق (بتحدده من "تعديل بيانات العربة") هما كل اللي السائق محتاجه.</p>${ctlHtml(c,true)}</div>
  <div class="ban${s==='going'?' g':''}">${esc(banner(c))}</div>${cntHtml(c,conf,w)}
@@ -216,19 +226,23 @@ function form(title,fields,ok){$('dt').textContent=title;
  $('dok').onclick=e=>{e.preventDefault();const v={};new FormData($('dform')).forEach((x,k)=>v[k]=x);$('dlg').close();ok(v)};$('dlg').showModal()}
 const pk=()=>[...P().map(s=>[s.id,s.name]),[0,'أخرى (اكتب الوصف تحت)']];
 const showCreds=(c,token,pw)=>form(pw?'تم! احفظ البيانات دي':'الرابط الجديد',[{k:'l',l:'رابط العربة (ابعته للركاب وللسائق)',v:linkT(token)},...(pw?[{k:'p',l:'باسورد السائق (بيظهر مرة واحدة)',v:pw}]:[])],()=>copy(linkT(token)));
-function carForm(c){const f=c&&c.depart?from24(c.depart):{h:7,m:0,ap:''};
+function carForm(c){const f=c&&c.depart?from24(c.depart):{h:7,m:0,ap:''},ob=isoToCairo(c&&c.book_at),bf=ob.t?from24(ob.t):{h:7,m:0,ap:'ص'};
  form(c?'تعديل '+c.name:'إضافة عربة جديدة',[
   {k:'n',l:'اسم العربة / الرحلة',v:c?c.name:''},
   {k:'g',l:'المجموعة (القسم)',t:'sel',o:[['','بدون مجموعة'],...GR.map(g=>[g.id,g.name]),['new','+ مجموعة جديدة']],v:c&&c.group_id||''},
   {k:'g2',l:'اسم المجموعة الجديدة (لو اخترت + مجموعة جديدة)',v:''},
-  {k:'c',l:'عدد المقاعد',t:'number',v:c?c.capacity:14},
+  {k:'cm',l:'نوع العربة',t:'sel',o:[['l','محدودة العدد (مقاعد + احتياطي)'],['u','غير محدودة العدد (بدون احتياطي)']],v:c&&c.capacity==null?'u':'l'},
+  {k:'c',l:'عدد المقاعد (للمحدودة فقط)',t:'number',v:c&&c.capacity?c.capacity:14},
   {k:'d',l:'التفاصيل (مثلًا: اسم المدرسة أو الكنيسة أو المكان)',t:'area',v:c&&c.details||''},
-  {k:'h',l:'موعد الانطلاق - الساعة',t:'sel',o:HR,v:f.h},{k:'m',l:'الدقيقة',t:'sel',o:MN,v:f.m},
+  {k:'h',l:'موعد انطلاق الرحلة - الساعة',t:'sel',o:HR,v:f.h},{k:'m',l:'الدقيقة',t:'sel',o:MN,v:f.m},
   {k:'a',l:'صباحًا / مساءً',t:'sel',o:[['','بدون موعد'],['ص','ص (صباحًا)'],['م','م (مساءً)']],v:f.ap},
+  {k:'bd',l:'⏳ فتح الحجز تلقائيًا - التاريخ (اتركه فاضي = الحجز مفتوح فورًا)',t:'date',v:ob.d},
+  {k:'bh',l:'ساعة فتح الحجز',t:'sel',o:HR,v:bf.h},{k:'bm',l:'الدقيقة',t:'sel',o:MN,v:bf.m},
+  {k:'ba',l:'صباحًا / مساءً',t:'sel',o:[['ص','ص (صباحًا)'],['م','م (مساءً)']],v:bf.ap||'ص'},
   {k:'w',l:c?'باسورد سائق جديد (اتركه فاضي للإبقاء على القديم)':'باسورد السائق (اتركه فاضي ويتولّد تلقائي)',t:'text',v:''}],
  async v=>{let g=v.g;if(g==='new'){if((v.g2||'').trim().length<2)return toast('اكتب اسم المجموعة الجديدة');const r=await rpc('staff_add_group',{pw:PW,p_name:v.g2});if(!r)return;g=r.data}
   if(!v.n.trim())return toast('اكتب اسم العربة');
-  const a={p_name:v.n,p_group:g?+g:null,p_cap:+v.c||14,p_details:v.d,p_depart:to24(v.h,v.m,v.a),p_dpw:v.w};
+  const a={p_name:v.n,p_group:g?+g:null,p_cap:v.cm==='u'?null:(+v.c||14),p_details:v.d,p_depart:to24(v.h,v.m,v.a),p_dpw:v.w,p_bookat:v.bd?cairoToIso(v.bd,to24(v.bh,v.bm,v.ba)):null};
   if(c){const r=await rpc('staff_edit_car',{pw:PW,p_id:c.id,...a},'تم حفظ التعديلات');if(r&&v.w.trim())toast('تم حفظ التعديلات وتغيير باسورد السائق')}
   else{const r=await rpc('staff_add_car',{pw:PW,...a});if(r&&r.data)showCreds(null,r.data.token,r.data.pw||v.w.trim())}})}
 function passForm(x,cid){form(x?'تعديل بيانات الراكب':'إضافة راكب',[{k:'n',l:'الاسم',v:x?x.name:''},{k:'s',l:'محطة الركوب',t:'sel',o:pk(),v:x?(x.stop_id||0):P()[0]?P()[0].id:0},{k:'t',l:'وصف المكان (لو اخترت أخرى)',v:x&&x.pickup_text||''},{k:'d',l:'محطة النزول (اختار أو اكتب)',v:x&&x.drop_name||'',dl:1}],
