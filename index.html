@@ -59,8 +59,8 @@ details{border-top:1px solid var(--line);padding:6px 0}summary{cursor:pointer;fo
 <div id="toast" role="status"></div>
 <script>
 /* ===== بيانات Supabase (Project URL + Publishable/anon key) ===== */
-const SUPABASE_URL = 'https://pabvyydctwwufmiecmzc.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_b6mILrA24y6WDle98R-UHw_mWtdJw9o';
+const SUPABASE_URL='';
+const SUPABASE_ANON_KEY='';
 /* ================================================================= */
 const $=i=>document.getElementById(i),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const sb=SUPABASE_URL?supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY):null;
@@ -82,8 +82,8 @@ const t12=s=>{if(!s)return'';let[h,m]=s.split(':').map(Number);const ap=h>=12?'�
 const HR=[...Array(12)].map((_,i)=>[i+1,String(i+1)]),MN=[...Array(12)].map((_,i)=>[i*5,String(i*5).padStart(2,'0')]);
 const to24=(h,m,ap)=>ap?String((+h%12)+(ap==='م'?12:0)).padStart(2,'0')+':'+String(+m).padStart(2,'0'):'';
 const from24=s=>{if(!s)return{h:7,m:0,ap:''};const[h,m]=s.split(':').map(Number);return{h:h%12||12,m:(Math.round(m/5)*5)%60,ap:h>=12?'م':'ص'}};
-const bt=iso=>{const d=new Date(iso),z='Africa/Cairo',day=x=>x.toLocaleDateString('en-CA',{timeZone:z});
- const t=new Intl.DateTimeFormat('en-US',{timeZone:z,hour:'numeric',minute:'2-digit',hour12:true}).format(d).replace('AM','ص').replace('PM','م');
+const bt=(iso,sec)=>{const d=new Date(iso),z='Africa/Cairo',day=x=>x.toLocaleDateString('en-CA',{timeZone:z});
+ const t=new Intl.DateTimeFormat('en-US',{timeZone:z,hour:'numeric',minute:'2-digit',...(sec?{second:'2-digit'}:{}),hour12:true}).format(d).replace('AM','ص').replace('PM','م');
  const n=new Date(),y=new Date(n.getTime()-864e5),tm=new Date(n.getTime()+864e5),dd=day(d);
  const lb=dd===day(n)?'اليوم':dd===day(y)?'امبارح':dd===day(tm)?'بكرة':new Intl.DateTimeFormat('en-GB',{timeZone:z,day:'numeric',month:'numeric'}).format(d);
  return lb+' '+t};
@@ -127,18 +127,18 @@ function rowsHtml(c,bs,staff){const cap=capOf(c),open=c.status==='open';
   const act=(staff?`<button data-a="edit" data-i="${x.id}">تعديل</button><button data-a="up" data-i="${x.id}" aria-label="أعلى">↑</button><button data-a="dn" data-i="${x.id}" aria-label="أسفل">↓</button><button data-a="del" data-i="${x.id}" aria-label="حذف">✕</button>`:'')
    +(m&&open?`<button data-a="note" data-i="${x.id}" aria-label="ملاحظة">✏️</button>`+(staff?'':`<button data-a="cancel" data-i="${x.id}">إلغاء</button>`):'');
   const from=x.stop_id?esc(nm(x.stop_id)):'📍 '+esc(x.pickup_text||'—');
-  return `<div class="row"><span class="no ${i<cap?'':'w'}">${i+1}</span><div class="t">${esc(x.name)}${m?' (أنت)':''}<small>${i<cap?(cap===Infinity?'محجوز':'مؤكد'):'احتياطي رقم '+(i-cap+1)} - من ${from} إلى ${esc(x.drop_name||'—')}</small>${x.created_at?`<small>🕒 وقت الحجز: ${bt(x.created_at)}</small>`:''}${nt}</div><div class="a">${act}</div></div>`};
+  return `<div class="row"><span class="no ${i<cap?'':'w'}">${i+1}</span><div class="t">${esc(x.name)}${m?' (أنت)':''}<small>${i<cap?(cap===Infinity?'محجوز':'مؤكد'):'احتياطي رقم '+(i-cap+1)} - من ${from} إلى ${esc(x.drop_name||'—')}</small>${x.created_at?`<small>🕒 وقت الحجز: ${bt(x.created_at,true)}</small>`:''}${nt}</div><div class="a">${act}</div></div>`};
  if(!bs.length)return '<p class="mut">مفيش حجوزات لسه على العربة دي.</p>';
  const n=Math.min(bs.length,cap),all=bs.map(row);
- return (cap===Infinity?'':`<div class="sh">✅ المقاعد المؤكدة (${n} من ${cap}) - بالأسبق في الحجز</div>`)+all.slice(0,n).join('')
+ return (cap===Infinity?'':`<div class="sh">✅ المقاعد المؤكدة (${n} من ${cap}) - بالأسبق في الحجز (بالثانية)</div>`)+all.slice(0,n).join('')
   +(bs.length>n?`<div class="sh w">⏳ قائمة الاحتياطي (${bs.length-n}) - بتتأكد تلقائي لو حد اعتذر</div>`+all.slice(n).join(''):'')}
 function sumHtml(c,conf){const oth=conf.filter(x=>!x.stop_id);
  return P().map((p,i)=>{const l=conf.filter(x=>x.stop_id===p.id);return `<details ${l.length?'open':''}><summary>${i+1}. ${esc(p.name)} - ${l.length} راكب</summary>${l.map(x=>`<div>${esc(x.name)} ← ${esc(x.drop_name||'—')}${notes[x.id]?' - 📝 '+esc(notes[x.id]):''}</div>`).join('')||'<div class="mut">لا أحد</div>'}</details>`}).join('')
  +(oth.length?`<details open><summary>📍 أماكن أخرى (بالوصف) - ${oth.length} راكب</summary>${oth.map(x=>`<div>${esc(x.name)} - ${esc(x.pickup_text||'')} ← ${esc(x.drop_name||'—')}${notes[x.id]?' - 📝 '+esc(notes[x.id]):''}</div>`).join('')}</details>`:'')}
 function ctlHtml(c,full){const s=c.status,PS=P();
  return `<div class="ctl"><button class="go" data-a="start" ${s==='open'||s==='closed'?'':'disabled'}>بدء الرحلة</button><button data-a="next" ${s==='going'&&PS.some(p=>p.ord>c.cur)?'':'disabled'}>وصلنا المحطة التالية</button><button class="red" data-a="end" ${s==='going'?'':'disabled'}>إنهاء الرحلة</button>
- ${s==='open'?'<button data-a="closeb">قفل الحجز</button>':s==='closed'||(s==='done'&&full)?'<button data-a="openb">فتح الحجز</button>':'<button disabled>الحجز مقفول</button>'}
- <button data-a="addp">+ إضافة راكب</button>${full?'<button data-a="editcar">تعديل بيانات العربة</button><button data-a="regen">🔄 تغيير الرابط</button><button data-a="reset">تصفير الحجوزات</button><button class="red" data-a="delcar">حذف العربة نهائيًا</button>':''}</div>`}
+ ${s==='open'?(!opened(c)?'<button data-a="openb">فتح الحجز الآن</button>':'<button data-a="closeb">قفل الحجز</button>'):s==='closed'||(s==='done'&&full)?'<button data-a="openb">فتح الحجز</button>':'<button disabled>الحجز مقفول</button>'}
+ <button data-a="sched" ${s==='open'||s==='closed'?'':'disabled'}>⏳ تحديد موعد فتح الحجز</button><button data-a="addp">+ إضافة راكب</button>${full?'<button data-a="editcar">تعديل بيانات العربة</button><button data-a="regen">🔄 تغيير الرابط</button><button data-a="reset">تصفير الحجوزات</button><button class="red" data-a="delcar">حذف العربة نهائيًا</button>':''}</div>`}
 const notFound=()=>`<div class="card" style="text-align:center;margin-top:40px"><h2>الرابط ده مش موجود</h2><p class="mut">الرابط غير صحيح أو اتحذف أو اتغيّر. اطلب رابط جديد من المسؤول.</p></div>`;
 
 /* ---- التوجيه ---- */
@@ -284,6 +284,10 @@ $('app').onclick=async e=>{const b=e.target.closest('[data-a]');if(!b)return;con
  case 'grp':renderGrp();$('dlg3').showModal();break;
  case 'stn':renderMgr();$('dlg2').showModal();break;
  case 'pws':form('تغيير باسورد المسؤول',[{k:'a',l:'الباسورد الجديد (4 أحرف على الأقل)',t:'password',v:''}],async v=>{if(!v.a)return;const r=await rpc('staff_set_pw',{pw:PW,newpw:v.a},'تم تغيير الباسورد');if(r){PW=v.a;ssSet('adm',PW)}});break;
+ case 'sched':{const ob=isoToCairo(car.book_at),bf=ob.t?from24(ob.t):{h:7,m:0,ap:'ص'};form('تحديد موعد فتح الحجز - '+car.name,[
+  {k:'bd',l:'التاريخ',t:'date',v:ob.d||isoToCairo(new Date().toISOString()).d},{k:'bh',l:'الساعة',t:'sel',o:HR,v:bf.h},{k:'bm',l:'الدقيقة',t:'sel',o:MN,v:bf.m},{k:'ba',l:'صباحًا / مساءً',t:'sel',o:[['ص','ص (صباحًا)'],['م','م (مساءً)']],v:bf.ap||'ص'},
+  {k:'x',l:'الإجراء',t:'sel',o:[['s','حفظ الموعد - الحجز يفتح تلقائيًا فيه'],['c','إلغاء الجدولة - الحجز يفتح فورًا']],v:'s'}],
+  v=>{const off=v.x==='c'||!v.bd;rpc('staff_set_bookat',{pw:PW,p_car:cid,p_bookat:off?null:cairoToIso(v.bd,to24(v.bh,v.bm,v.ba))},off?'تم إلغاء الجدولة':'تم حفظ موعد فتح الحجز')});break}
  case 'start':confirm('بدء رحلة '+car.name+' وقفل الحجز؟')&&trip('start');break;
  case 'next':trip('next');break;
  case 'end':confirm('إنهاء رحلة '+car.name+'؟')&&trip('end');break;
