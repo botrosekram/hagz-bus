@@ -59,16 +59,18 @@ details{border-top:1px solid var(--line);padding:6px 0}summary{cursor:pointer;fo
 <div id="toast" role="status"></div>
 <script>
 /* ===== بيانات Supabase (Project URL + Publishable/anon key) ===== */
-const SUPABASE_URL = 'https://pabvyydctwwufmiecmzc.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_b6mILrA24y6WDle98R-UHw_mWtdJw9o';
+const SUPABASE_URL='';
+const SUPABASE_ANON_KEY='';
 /* ================================================================= */
 const $=i=>document.getElementById(i),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const sb=SUPABASE_URL?supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY):null;
-let B=[],ST=[],CARS=[],GR=[],role=null,PW='',notes={},mine={},prev=null,filt='all',loaded=false;
+let B=[],ST=[],CARS=[],GR=[],role=null,PW='',notes={},mine={},prev=null,filt='all',loaded=false,LAST=null;
 try{mine=JSON.parse(localStorage.getItem('mine2')||'{}')}catch(e){}
 const saveMine=()=>{try{localStorage.setItem('mine2',JSON.stringify(mine))}catch(e){}};
+const dev=(()=>{try{let d=localStorage.getItem('dev1');if(!d){d=[...Array(24)].map(()=>Math.floor(Math.random()*16).toString(16)).join('');localStorage.setItem('dev1',d)}return d}catch(e){return ''}})();
+const nk=s=>String(s||'').trim().replace(/\s+/g,' ').toLowerCase();
 const ss=k=>{try{return sessionStorage.getItem(k)}catch(e){return null}},ssSet=(k,v)=>{try{sessionStorage.setItem(k,v)}catch(e){}},ssDel=k=>{try{sessionStorage.removeItem(k)}catch(e){}};
-const P=()=>ST.filter(s=>s.kind==='pickup').sort((a,b)=>a.ord-b.ord),D=()=>ST.filter(s=>s.kind==='drop').sort((a,b)=>a.ord-b.ord),nm=id=>(ST.find(s=>s.id===id)||{}).name||'؟';
+const P=c=>c?ST.filter(s=>s.car_id===c.id&&s.kind==='pickup').sort((a,b)=>a.ord-b.ord):[],D=c=>c?ST.filter(s=>s.car_id===c.id&&s.kind==='drop').sort((a,b)=>a.ord-b.ord):[],nm=id=>(ST.find(s=>s.id===id)||{}).name||'؟';
 const carB=c=>c?B.filter(x=>x.car_id===c.id):[],grp=c=>c.group?{name:c.group}:GR.find(g=>g.id===c.group_id);
 const R=()=>location.hash.replace(/^#\/?/,'').split('/').filter(Boolean),go=p=>{location.hash='#/'+p};
 const curCar=()=>{const r=R();return r[0]==='car'?CARS[0]:(r[0]==='admin'&&r[1]==='car'?CARS.find(c=>c.id===+r[2]):null)};
@@ -79,11 +81,12 @@ const opened=c=>!c.book_at||Date.now()+skew>=Date.parse(c.book_at);
 async function copy(t){try{await navigator.clipboard.writeText(t);toast('تم نسخ الرابط')}catch(e){prompt('انسخ الرابط',t)}}
 /* ---- وقت 12 ساعة ---- */
 const t12=s=>{if(!s)return'';let[h,m]=s.split(':').map(Number);const ap=h>=12?'م':'ص';h=h%12||12;return h+':'+String(m).padStart(2,'0')+' '+ap};
-const HR=[...Array(12)].map((_,i)=>[i+1,String(i+1)]),MN=[...Array(12)].map((_,i)=>[i*5,String(i*5).padStart(2,'0')]);
+const HR=[...Array(12)].map((_,i)=>[i+1,String(i+1)]),MN=[...Array(60)].map((_,i)=>[i,String(i).padStart(2,'0')]);
 const to24=(h,m,ap)=>ap?String((+h%12)+(ap==='م'?12:0)).padStart(2,'0')+':'+String(+m).padStart(2,'0'):'';
-const from24=s=>{if(!s)return{h:7,m:0,ap:''};const[h,m]=s.split(':').map(Number);return{h:h%12||12,m:(Math.round(m/5)*5)%60,ap:h>=12?'م':'ص'}};
+const from24=s=>{if(!s)return{h:7,m:0,ap:''};const[h,m]=s.split(':').map(Number);return{h:h%12||12,m:m,ap:h>=12?'م':'ص'}};
 const bt=(iso,sec)=>{const d=new Date(iso),z='Africa/Cairo',day=x=>x.toLocaleDateString('en-CA',{timeZone:z});
- const t=new Intl.DateTimeFormat('en-US',{timeZone:z,hour:'numeric',minute:'2-digit',...(sec?{second:'2-digit'}:{}),hour12:true}).format(d).replace('AM','ص').replace('PM','م');
+ const o={timeZone:z,hour:'numeric',minute:'2-digit',hour12:true};if(sec)o.second='2-digit';if(sec==='ms')o.fractionalSecondDigits=3;
+ const t=new Intl.DateTimeFormat('en-US',o).format(d).replace('AM','ص').replace('PM','م');
  const n=new Date(),y=new Date(n.getTime()-864e5),tm=new Date(n.getTime()+864e5),dd=day(d);
  const lb=dd===day(n)?'اليوم':dd===day(y)?'امبارح':dd===day(tm)?'بكرة':new Intl.DateTimeFormat('en-GB',{timeZone:z,day:'numeric',month:'numeric'}).format(d);
  return lb+' '+t};
@@ -102,10 +105,10 @@ async function rpc(fn,args,ok){const {data,error}=await sb.rpc(fn,args);
  if(ok)toast(ok);await load();return {data}}
 const confIds=()=>CARS.flatMap(c=>carB(c).slice(0,capOf(c)).map(x=>x.id));
 async function load(){if(!sb)return;const r=R();
- const s=await sb.from('stops').select('*');if(s.error){$('app').innerHTML='<div class="card">تعذر الاتصال بقاعدة البيانات. تأكد من الإعدادات وإنك شغّلت setup.sql.</div>';return}ST=s.data;
- if(r[0]==='car'){const {data,error}=await sb.rpc('car_view',{p_token:r[1]});if(error){toast(error.message);return}CARS=data?[data.car]:[];B=data?data.bookings:[];GR=[];if(data)skew=Date.parse(data.now)-Date.now()}
- else if(r[0]==='admin'&&role==='admin'){const {data,error}=await sb.rpc('admin_data',{pw:PW});if(error){logout();return}CARS=data.cars;GR=data.groups;B=data.bookings;skew=Date.parse(data.now)-Date.now()}
- else{CARS=[];B=[];GR=[]}
+ if(r[0]==='car'){const {data,error}=await sb.rpc('car_view',{p_token:r[1]});if(error){toast('تعذر الاتصال: '+error.message);return}
+  CARS=data?[data.car]:[];B=data?data.bookings:[];ST=data?data.stops:[];GR=[];if(data)skew=Date.parse(data.now)-Date.now()}
+ else if(r[0]==='admin'&&role==='admin'){const {data,error}=await sb.rpc('admin_data',{pw:PW});if(error){logout();return}CARS=data.cars;GR=data.groups;B=data.bookings;ST=data.stops;skew=Date.parse(data.now)-Date.now()}
+ else{CARS=[];B=[];GR=[];ST=[]}
  const nc=role&&curCar();notes={};
  if(nc){const n=await sb.rpc('staff_notes',{pw:PW,p_car:nc.id});if(n.error){logout();return}n.data.forEach(x=>notes[x.booking_id]=x.note)}
  const old=prev,conf=confIds();loaded=true;
@@ -114,9 +117,10 @@ async function load(){if(!sb)return;const r=R();
  prev={all:B.map(x=>x.id),conf};render()}
 
 /* ---- مكونات مشتركة ---- */
-const banner=c=>{const dp=c.depart?' - موعد الانطلاق '+t12(c.depart):'',cs=P().find(s=>s.ord===c.cur);
+const banner=c=>{const dp=c.depart?' - موعد الانطلاق '+t12(c.depart):'',cs=P(c).find(s=>s.ord===c.cur);
  return c.status==='open'?(opened(c)?'الحجز مفتوح - الرحلة لم تبدأ بعد'+dp:'⏳ الحجز لسه مفتحش - هيفتح '+bt(c.book_at)+dp):c.status==='closed'?'الحجز مقفول'+dp:c.status==='going'?'السائق بدأ الرحلة - العربة دلوقتي عند: '+(cs?cs.name:'—')+dp:'انتهت الرحلة'};
-function metroHtml(c,conf){const PS=P(),going=c.status==='going'||c.status==='done';
+function metroHtml(c,conf){const PS=P(c),going=c.status==='going'||c.status==='done';
+ if(!PS.length)return '<p class="mut">لسه مفيش محطات في خط السير.'+(role?' ضيفها من "🚏 إدارة المحطات".':'')+'</p>';
  const o=conf.filter(x=>!x.stop_id).length;
  return '<ol class="m">'+PS.map((s,i)=>{const k=conf.filter(x=>x.stop_id===s.id).length,cl=c.status==='done'||(going&&c.cur>s.ord)?'p':(going&&c.cur===s.ord?'c':'');
   return `<li class="${cl}"><span class="dot">${i+1}</span><div class="nm"><span>${cl==='c'?'<b>'+esc(s.name)+'</b>':esc(s.name)}</span>${k?`<span class="chip">${k} صعود</span>`:''}</div></li>`}).join('')+'</ol>'+(o?`<p class="mut sm">+ ${o} راكب بأماكن ركوب مكتوبة بالوصف (شوف القايمة)</p>`:'')}
@@ -127,18 +131,18 @@ function rowsHtml(c,bs,staff){const cap=capOf(c),open=c.status==='open';
   const act=(staff?`<button data-a="edit" data-i="${x.id}">تعديل</button><button data-a="up" data-i="${x.id}" aria-label="أعلى">↑</button><button data-a="dn" data-i="${x.id}" aria-label="أسفل">↓</button><button data-a="del" data-i="${x.id}" aria-label="حذف">✕</button>`:'')
    +(m&&open?`<button data-a="note" data-i="${x.id}" aria-label="ملاحظة">✏️</button>`+(staff?'':`<button data-a="cancel" data-i="${x.id}">إلغاء</button>`):'');
   const from=x.stop_id?esc(nm(x.stop_id)):'📍 '+esc(x.pickup_text||'—');
-  return `<div class="row"><span class="no ${i<cap?'':'w'}">${i+1}</span><div class="t">${esc(x.name)}${m?' (أنت)':''}<small>${i<cap?(cap===Infinity?'محجوز':'مؤكد'):'احتياطي رقم '+(i-cap+1)} - من ${from} إلى ${esc(x.drop_name||'—')}</small>${x.created_at?`<small>🕒 وقت الحجز: ${bt(x.created_at,true)}</small>`:''}${nt}</div><div class="a">${act}</div></div>`};
+  return `<div class="row"><span class="no ${i<cap?'':'w'}">${i+1}</span><div class="t">${esc(x.name)}${m?' (أنت)':''}<small>${i<cap?(cap===Infinity?'محجوز':'مؤكد'):'احتياطي رقم '+(i-cap+1)} - من ${from} إلى ${esc(x.drop_name||'—')}</small>${x.created_at?`<small>🕒 وقت الحجز: ${bt(x.created_at,'ms')}</small>`:''}${nt}</div><div class="a">${act}</div></div>`};
  if(!bs.length)return '<p class="mut">مفيش حجوزات لسه على العربة دي.</p>';
  const n=Math.min(bs.length,cap),all=bs.map(row);
  return (cap===Infinity?'':`<div class="sh">✅ المقاعد المؤكدة (${n} من ${cap}) - بالأسبق في الحجز (بالثانية)</div>`)+all.slice(0,n).join('')
   +(bs.length>n?`<div class="sh w">⏳ قائمة الاحتياطي (${bs.length-n}) - بتتأكد تلقائي لو حد اعتذر</div>`+all.slice(n).join(''):'')}
 function sumHtml(c,conf){const oth=conf.filter(x=>!x.stop_id);
- return P().map((p,i)=>{const l=conf.filter(x=>x.stop_id===p.id);return `<details ${l.length?'open':''}><summary>${i+1}. ${esc(p.name)} - ${l.length} راكب</summary>${l.map(x=>`<div>${esc(x.name)} ← ${esc(x.drop_name||'—')}${notes[x.id]?' - 📝 '+esc(notes[x.id]):''}</div>`).join('')||'<div class="mut">لا أحد</div>'}</details>`}).join('')
+ return P(c).map((p,i)=>{const l=conf.filter(x=>x.stop_id===p.id);return `<details ${l.length?'open':''}><summary>${i+1}. ${esc(p.name)} - ${l.length} راكب</summary>${l.map(x=>`<div>${esc(x.name)} ← ${esc(x.drop_name||'—')}${notes[x.id]?' - 📝 '+esc(notes[x.id]):''}</div>`).join('')||'<div class="mut">لا أحد</div>'}</details>`}).join('')
  +(oth.length?`<details open><summary>📍 أماكن أخرى (بالوصف) - ${oth.length} راكب</summary>${oth.map(x=>`<div>${esc(x.name)} - ${esc(x.pickup_text||'')} ← ${esc(x.drop_name||'—')}${notes[x.id]?' - 📝 '+esc(notes[x.id]):''}</div>`).join('')}</details>`:'')}
-function ctlHtml(c,full){const s=c.status,PS=P();
+function ctlHtml(c,full){const s=c.status,PS=P(c);
  return `<div class="ctl"><button class="go" data-a="start" ${s==='open'||s==='closed'?'':'disabled'}>بدء الرحلة</button><button data-a="next" ${s==='going'&&PS.some(p=>p.ord>c.cur)?'':'disabled'}>وصلنا المحطة التالية</button><button class="red" data-a="end" ${s==='going'?'':'disabled'}>إنهاء الرحلة</button>
  ${s==='open'?(!opened(c)?'<button data-a="openb">فتح الحجز الآن</button>':'<button data-a="closeb">قفل الحجز</button>'):s==='closed'||(s==='done'&&full)?'<button data-a="openb">فتح الحجز</button>':'<button disabled>الحجز مقفول</button>'}
- <button data-a="sched" ${s==='open'||s==='closed'?'':'disabled'}>⏳ تحديد موعد فتح الحجز</button><button data-a="addp">+ إضافة راكب</button>${full?'<button data-a="editcar">تعديل بيانات العربة</button><button data-a="regen">🔄 تغيير الرابط</button><button data-a="reset">تصفير الحجوزات</button><button class="red" data-a="delcar">حذف العربة نهائيًا</button>':''}</div>`}
+ <button data-a="sched" ${s==='open'||s==='closed'?'':'disabled'}>⏳ تحديد موعد فتح الحجز</button><button data-a="addp">+ إضافة راكب</button><button data-a="stn">🚏 إدارة المحطات</button><button data-a="editcar">✏️ تعديل بيانات الرحلة</button><button data-a="reset">♻️ تصفير الرحلة (رحلة جديدة)</button>${full?'<button data-a="regen">🔄 تغيير الرابط</button><button class="red" data-a="delcar">حذف العربة نهائيًا</button>':''}</div>`}
 const notFound=()=>`<div class="card" style="text-align:center;margin-top:40px"><h2>الرابط ده مش موجود</h2><p class="mut">الرابط غير صحيح أو اتحذف أو اتغيّر. اطلب رابط جديد من المسؤول.</p></div>`;
 
 /* ---- التوجيه ---- */
@@ -147,7 +151,7 @@ function render(){const r=R(),key=r.join('/')+'|'+(role||'');
  if(key!==render.k){render.k=key;mount(r)}
  if(r[0]==='car')updCar();else if(r[0]==='admin'){if(role==='admin'){r[1]==='car'?updAdminCar():updDash()}}else updHome()}
 function mount(r){const a=$('app');a.className='w'+(r[0]==='admin'&&role==='admin'?' wide':'');window.scrollTo(0,0);
- if(r[0]==='car'){fillSel.k='';a.innerHTML=`<div id="cbn"></div><div id="cnt"></div><div id="drv"></div>
+ if(r[0]==='car'){fillSel.k='';a.innerHTML=`<div id="cbn"></div><div id="drv"></div><div id="cnt"></div><div id="bres"></div>
  <div class="card" id="fm"><b>احجز مقعدك</b>
  <label for="nm">الاسم</label><input id="nm" autocomplete="off" placeholder="اكتب اسمك">
  <label for="st">هتركب منين؟</label><select id="st"></select>
@@ -155,18 +159,19 @@ function mount(r){const a=$('app');a.className='w'+(r[0]==='admin'&&role==='admi
  <label for="dr">هتنزل فين؟</label><select id="dr"></select>
  <input id="dro" placeholder="اكتب اسم محطة النزول" hidden style="margin-top:8px">
  <button class="go" data-a="book" id="bk" style="width:100%;margin-top:14px;padding:13px">احجز</button></div>
- <div class="card"><b>خط السير</b><div id="mt"></div></div><div class="card"><b id="lt">قائمة الحجز</b><div id="list"></div></div><div id="sm"></div>
- <div style="text-align:center;margin-top:22px" id="ft"></div>`;
+ <div class="card"><b>خط السير</b><div id="mt"></div></div><div class="card"><b id="lt">قائمة الحجز</b><div id="list"></div></div><div id="sm"></div>`;
  $('st').onchange=()=>{$('pko').hidden=$('st').value!=='other'};$('dr').onchange=()=>{$('dro').hidden=$('dr').value!=='other'}}
  else if(r[0]==='admin'){a.innerHTML=role==='admin'?'<div id="ad"></div>':`<div class="card" style="max-width:380px;margin:20px auto"><b>دخول المسؤول</b><label for="pw">كلمة المرور</label><input id="pw" type="password" autocomplete="off"><button class="go" data-a="login" style="width:100%;margin-top:12px">دخول</button></div>`}
  else a.innerHTML='<div id="hm"></div>'}
 $('app').onkeydown=e=>{if(e.key==='Enter'&&e.target.id==='pw')$('app').querySelector('[data-a=login]').click()};
-window.onhashchange=async()=>{if(!sb)return;loaded=false;CARS=[];B=[];prev=null;render();await auth();await load()};
+window.onhashchange=async()=>{if(!sb)return;loaded=false;CARS=[];B=[];ST=[];prev=null;LAST=null;render();await auth();await load()};
 
-function fillSel(){const k=JSON.stringify(ST);if(fillSel.k===k||!$('st'))return;fillSel.k=k;const s=$('st').value,d=$('dr').value;
- $('st').innerHTML='<option value="">اختر محطة الركوب</option>'+P().map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('')+'<option value="other">أخرى (اكتب وصف مكانك)</option>';
- $('dr').innerHTML='<option value="">اختر محطة النزول</option>'+D().map(x=>`<option value="${esc(x.name)}">${esc(x.name)}</option>`).join('')+'<option value="other">أخرى (اكتب اسم المحطة)</option>';
- if(s)$('st').value=s;if(d)$('dr').value=d}
+function fillSel(c){const k=JSON.stringify(ST.filter(s=>s.car_id===c.id));if(fillSel.k===k||!$('st'))return;fillSel.k=k;const s=$('st').value,d=$('dr').value;
+ $('st').innerHTML='<option value="">اختر محطة الركوب</option>'+P(c).map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('')+'<option value="other">أخرى (اكتب وصف مكانك)</option>';
+ $('dr').innerHTML='<option value="">اختر محطة النزول</option>'+D(c).map(x=>`<option value="${esc(x.name)}">${esc(x.name)}</option>`).join('')+'<option value="other">أخرى (اكتب اسم المحطة)</option>';
+ if(s)$('st').value=s;if(d)$('dr').value=d;
+ if(!P(c).length)$('st').value='other';if(!D(c).length)$('dr').value='other';
+ $('pko').hidden=$('st').value!=='other';$('dro').hidden=$('dr').value!=='other'}
 
 /* ---- الصفحة الرئيسية (مفيش قايمة عربات) ---- */
 function updHome(){const h=$('hm');if(!h)return;
@@ -176,27 +181,33 @@ function updHome(){const h=$('hm');if(!h)return;
 function updCar(){if(!$('cbn'))return;
  if(!loaded){$('cbn').innerHTML='<p class="mut">جارٍ التحميل…</p>';return}
  const c=CARS[0];if(!c){$('app').innerHTML=notFound();render.k='';return}
- fillSel();const bs=carB(c),conf=bs.slice(0,capOf(c)),g=grp(c);
- $('cbn').innerHTML=`<h1>${esc(c.name)} ${g?`<span class="tag">${esc(g.name)}</span>`:''}</h1>${c.details?`<p class="mut">${esc(c.details)}</p>`:''}<div class="ban${c.status==='going'?' g':''}" aria-live="polite">${esc(banner(c))}</div>`;
- $('cnt').innerHTML=cntHtml(c,conf,bs.length-conf.length);$('fm').hidden=!(c.status==='open'&&opened(c));clearTimeout(updCar.t);if(c.status==='open'&&c.book_at&&!opened(c))updCar.t=setTimeout(load,Math.min(Date.parse(c.book_at)-(Date.now()+skew)+400,2147000000));
- $('drv').innerHTML=role?`<div class="card"><b>${role==='admin'?'تحكم المسؤول':'لوحة السائق'}</b>${ctlHtml(c,false)}${role==='admin'?`<div style="margin-top:10px"><button data-a="go" data-p="admin/car/${c.id}">فتح في لوحة التحكم الكاملة</button></div>`:''}</div>`:'';
+ fillSel(c);const bs=carB(c),conf=bs.slice(0,capOf(c)),g=grp(c);
+ $('cbn').innerHTML=`<div class="top"><h1>${esc(c.name)} ${g?`<span class="tag">${esc(g.name)}</span>`:''}</h1>${role?`<button data-a="out">خروج (${role==='admin'?'مسؤول':'سائق'})</button>`:'<button data-a="dlogin">🔑 دخول السائق</button>'}</div>${c.details?`<p class="mut">${esc(c.details)}</p>`:''}
+ ${role?`<div class="card" style="margin-top:10px">🚌 الرحلات السابقة لهذه العربة: <b>${c.trips_done||0}</b></div>`:''}<div class="ban${c.status==='going'?' g':''}" aria-live="polite">${esc(banner(c))}</div>`;
+ $('drv').innerHTML=role?`<div class="card"><b>${role==='admin'?'تحكم المسؤول':'لوحة السائق'}</b>${ctlHtml(c,role==='admin')}${role==='admin'?`<div style="margin-top:10px"><button data-a="go" data-p="admin/car/${c.id}">فتح في لوحة التحكم الكاملة</button></div>`:''}</div>`:'';
+ $('cnt').innerHTML=cntHtml(c,conf,bs.length-conf.length);
+ $('bres').innerHTML=LAST&&LAST.car===c.id?`<div class="card" style="border:2px solid var(--go)"><div class="top"><b>✅ تم تسجيل حجزك</b><button data-a="bresx" aria-label="إغلاق">✕</button></div><p style="margin:6px 0 0">${esc(LAST.name)} - ${esc(LAST.pos)}</p><p style="margin:4px 0 0">🕒 وقت حجزك بالظبط: <b dir="ltr">${esc(LAST.time)}</b></p></div>`:'';
+ $('fm').hidden=!(c.status==='open'&&opened(c));clearTimeout(updCar.t);if(c.status==='open'&&c.book_at&&!opened(c))updCar.t=setTimeout(load,Math.min(Date.parse(c.book_at)-(Date.now()+skew)+400,2147000000));
  $('mt').innerHTML=metroHtml(c,conf);$('list').innerHTML=rowsHtml(c,bs,!!role);
- $('sm').innerHTML=role?`<div class="card"><b>كشف الركاب بالمحطات</b>${sumHtml(c,conf)}</div>`:'';
- $('ft').innerHTML=role?`<button data-a="out">تسجيل خروج (${role==='admin'?'مسؤول':'سائق'})</button>`:'<button data-a="dlogin" class="mut">دخول السائق</button>'}
+ $('sm').innerHTML=role?`<div class="card"><b>كشف الركاب بالمحطات</b>${sumHtml(c,conf)}</div>`:''}
 async function doBook(){const c=CARS[0];if(!c)return;if(c.status!=='open'||!opened(c))return toast('الحجز لسه مفتحش');
  const n=$('nm').value.trim(),sv=$('st').value,pt=$('pko').value.trim(),dv=$('dr').value,drop=dv==='other'?$('dro').value.trim():dv;
- if(n.length<2)return toast('اكتب اسمك الأول');if(!sv)return toast('اختار محطة الركوب');
+ if(n.length<2)return toast('اكتب اسمك الأول');
+ if(carB(c).some(x=>nk(x.name)===nk(n)))return toast('الاسم ده محجوز بالفعل في العربة دي');
+ if(c.capacity!=null&&carB(c).some(x=>x.id in mine))return toast('انت حاجز قبل كده في العربة دي من الجهاز ده');
+ if(!sv)return toast('اختار محطة الركوب');
  if(sv==='other'&&pt.length<3)return toast('اكتب وصف مكانك (الشارع / العمارة)');if(drop.length<2)return toast('اختار محطة النزول أو اكتبها');
- const r=await rpc('book',{p_token:R()[1],p_name:n,p_stop:sv==='other'?0:+sv,p_pick:sv==='other'?pt:'',p_drop:drop});if(!r)return;
+ const r=await rpc('book',{p_token:R()[1],p_name:n,p_stop:sv==='other'?0:+sv,p_pick:sv==='other'?pt:'',p_drop:drop,p_dev:dev});if(!r)return;
  mine[r.data.id]={s:r.data.secret,n:''};saveMine();$('nm').value='';$('pko').value='';$('dro').value='';
- const pos=carB(c).findIndex(x=>x.id===r.data.id)+1;toast(pos<=capOf(c)?`تم حجزك، رقمك ${pos}`:`العربة مكتملة، انت احتياطي رقم ${pos-capOf(c)}`)}
+ const cc=CARS[0]||c,pos=carB(cc).findIndex(x=>x.id===r.data.id)+1,cp=capOf(cc);
+ LAST={car:cc.id,name:n,pos:pos<=cp?'رقمك '+pos+' (مؤكد)':'احتياطي رقم '+(pos-cp),time:bt(r.data.created_at,'ms')};render();toast(pos<=cp?`تم حجزك، رقمك ${pos}`:`العربة مكتملة، انت احتياطي رقم ${pos-cp}`)}
 
 /* ---- لوحة المسؤول ---- */
-function carCard(c){const bs=carB(c),cp=capOf(c),conf=Math.min(bs.length,cp),w=Math.max(0,bs.length-cp),p=cp===Infinity?0:Math.round(conf/cp*100),g=grp(c),cs=P().find(s=>s.ord===c.cur),wait=c.status==='open'&&!opened(c);
+function carCard(c){const bs=carB(c),cp=capOf(c),conf=Math.min(bs.length,cp),w=Math.max(0,bs.length-cp),p=cp===Infinity?0:Math.round(conf/cp*100),g=grp(c),cs=P(c).find(s=>s.ord===c.cur),wait=c.status==='open'&&!opened(c);
  return `<article class="cc ${c.status}" data-a="opencar" data-i="${c.id}" tabindex="0" role="button"><div class="ct"><b>${esc(c.name)}</b>${g?`<span class="tag">${esc(g.name)}</span>`:''}</div>
  ${c.details?`<div class="mut sm">${esc(c.details)}</div>`:''}${cp===Infinity?'':`<div class="bar"><i style="width:${p}%"></i></div>`}
  <div class="sm">${cp===Infinity?bs.length+' حاجز (غير محدودة العدد)':conf+'/'+cp+' مقعد'+(w?' - احتياطي '+w:'')}</div>
- <div class="sm mut">${c.depart?'🕒 '+t12(c.depart):''}${wait?' - ⏳ الحجز يفتح '+bt(c.book_at):''}${c.status==='going'&&cs?' - عند: '+esc(cs.name):''}</div>
+ <div class="sm mut">${c.depart?'🕒 '+t12(c.depart):''}${wait?' - ⏳ الحجز يفتح '+bt(c.book_at):''}${c.status==='going'&&cs?' - عند: '+esc(cs.name):''} - رحلات سابقة: ${c.trips_done||0}</div>
  <div class="cb"><button data-a="opencar" data-i="${c.id}">فتح والتحكم</button><button data-a="copy" data-i="${c.id}">🔗 رابط</button></div></article>`}
 function updDash(){const d=$('ad');if(!d)return;if(!loaded){d.innerHTML='<p class="mut">جارٍ التحميل…</p>';return}
  const cnf=c=>Math.min(carB(c).length,capOf(c)),wt=c=>Math.max(0,carB(c).length-capOf(c));
@@ -204,7 +215,7 @@ function updDash(){const d=$('ad');if(!d)return;if(!loaded){d.innerHTML='<p clas
  const secs=[['🟢 عربات متاحة للحجز',ac.filter(c=>c.status==='open')],['🔒 عربات مغلقة / منتهية',ac.filter(c=>c.status==='closed'||c.status==='done')],['🚌 رحلات جارية الآن',ac.filter(c=>c.status==='going')]];
  const nOpen=CARS.filter(c=>c.status==='open').length,nClosed=CARS.filter(c=>c.status==='closed'||c.status==='done').length,nGo=CARS.filter(c=>c.status==='going').length,nNone=CARS.filter(c=>!grp(c)).length;
  d.innerHTML=`<div class="top"><div><h1>لوحة التحكم</h1><div class="mut sm">المسؤول</div></div>
- <div class="bt"><button class="go" data-a="addcar">+ إضافة عربة</button><button data-a="grp">المجموعات</button><button data-a="stn">المحطات</button><button data-a="pws">تغيير باسورد المسؤول</button><button data-a="out">خروج</button></div></div>
+ <div class="bt"><button class="go" data-a="addcar">+ إضافة عربة</button><button data-a="grp">المجموعات</button><button data-a="pws">تغيير باسورد المسؤول</button><button data-a="out">خروج</button></div></div>
  <div class="kpis"><div class="kpi"><b>${nOpen}</b>عربات متاحة</div><div class="kpi x"><b>${nClosed}</b>عربات مغلقة</div><div class="kpi a"><b>${nGo}</b>رحلات جارية</div>
  <div class="kpi"><b>${CARS.reduce((a,c)=>a+cnf(c),0)}</b>ركاب مؤكدين</div><div class="kpi x"><b>${CARS.reduce((a,c)=>a+wt(c),0)}</b>احتياطي</div></div>
  <div class="chips"><button class="${filt==='all'?'on':''}" data-a="filt" data-v="all">الكل (${CARS.length})</button>${GR.map(g=>`<button class="${filt==g.id?'on':''}" data-a="filt" data-v="${g.id}">${esc(g.name)} (${CARS.filter(c=>c.group_id===g.id).length})</button>`).join('')}${nNone?`<button class="${filt==='none'?'on':''}" data-a="filt" data-v="none">بدون مجموعة (${nNone})</button>`:''}</div>`
@@ -214,23 +225,23 @@ function updAdminCar(){const d=$('app');if(!loaded)return;const c=curCar();
  const bs=carB(c),conf=bs.slice(0,capOf(c)),w=bs.length-conf.length,g=grp(c),s=c.status;
  d.innerHTML=`<div><button data-a="go" data-p="admin">← لوحة التحكم</button></div>
  <div class="card"><div class="ct"><h1>${esc(c.name)}</h1><span class="stt ${s}">${STL[s]}</span></div>
- <div class="mut sm">${g?esc(g.name)+' - ':''}${c.capacity==null?'غير محدودة العدد':c.capacity+' مقعد'}${c.depart?' - 🕒 '+t12(c.depart):''}${c.book_at?' - ⏳ الحجز يفتح '+bt(c.book_at):''}</div>${c.details?`<p>${esc(c.details)}</p>`:''}
+ <div class="mut sm">${g?esc(g.name)+' - ':''}${c.capacity==null?'غير محدودة العدد':c.capacity+' مقعد'}${c.depart?' - 🕒 '+t12(c.depart):''}${c.book_at?' - ⏳ الحجز يفتح '+bt(c.book_at):''} - 🚌 رحلات سابقة: ${c.trips_done||0}</div>${c.details?`<p>${esc(c.details)}</p>`:''}
  <div class="lk"><input readonly value="${esc(linkT(c.token))}" aria-label="رابط العربة"><button data-a="copy" data-i="${c.id}">نسخ الرابط</button></div>
- <p class="mut sm" style="margin:6px 0 0">الرابط ده + باسورد السائق (بتحدده من "تعديل بيانات العربة") هما كل اللي السائق محتاجه.</p>${ctlHtml(c,true)}</div>
+ <p class="mut sm" style="margin:6px 0 0">الرابط ده + باسورد السائق (بتحدده من "تعديل بيانات الرحلة") هما كل اللي السائق محتاجه.</p>${ctlHtml(c,true)}</div>
  <div class="ban${s==='going'?' g':''}">${esc(banner(c))}</div>${cntHtml(c,conf,w)}
  <div class="two"><div class="card"><b>خط السير</b>${metroHtml(c,conf)}</div><div><div class="card"><b>قائمة الحجز</b>${rowsHtml(c,bs,true)}</div><div class="card"><b>كشف الركاب بالمحطات</b>${sumHtml(c,conf)}</div></div></div>`}
 
 /* ---- نوافذ ---- */
 function form(title,fields,ok){$('dt').textContent=title;
- $('df').innerHTML=fields.map(f=>`<label>${f.l}`+(f.t==='sel'?`<select name="${f.k}">${f.o.map(o=>`<option value="${esc(o[0])}" ${String(o[0])===String(f.v)?'selected':''}>${esc(o[1])}</option>`).join('')}</select>`:f.t==='area'?`<textarea name="${f.k}" rows="3">${esc(f.v)}</textarea>`:`<input name="${f.k}" type="${f.t||'text'}" value="${esc(f.v)}" ${f.dl?'list="dl"':''}>`)+'</label>').join('')+`<datalist id="dl">${D().map(x=>`<option value="${esc(x.name)}">`).join('')}</datalist>`;
+ $('df').innerHTML=fields.map(f=>`<label>${f.l}`+(f.t==='sel'?`<select name="${f.k}">${f.o.map(o=>`<option value="${esc(o[0])}" ${String(o[0])===String(f.v)?'selected':''}>${esc(o[1])}</option>`).join('')}</select>`:f.t==='area'?`<textarea name="${f.k}" rows="3">${esc(f.v)}</textarea>`:`<input name="${f.k}" type="${f.t||'text'}" value="${esc(f.v)}" ${f.dl?'list="dl"':''}>`)+'</label>').join('')+`<datalist id="dl">${D(curCar()).map(x=>`<option value="${esc(x.name)}">`).join('')}</datalist>`;
  $('dok').onclick=e=>{e.preventDefault();const v={};new FormData($('dform')).forEach((x,k)=>v[k]=x);$('dlg').close();ok(v)};$('dlg').showModal()}
-const pk=()=>[...P().map(s=>[s.id,s.name]),[0,'أخرى (اكتب الوصف تحت)']];
+const pk=()=>[...P(curCar()).map(s=>[s.id,s.name]),[0,'أخرى (اكتب الوصف تحت)']];
 const showCreds=(c,token,pw)=>form(pw?'تم! احفظ البيانات دي':'الرابط الجديد',[{k:'l',l:'رابط العربة (ابعته للركاب وللسائق)',v:linkT(token)},...(pw?[{k:'p',l:'باسورد السائق (بيظهر مرة واحدة)',v:pw}]:[])],()=>copy(linkT(token)));
-function carForm(c){const f=c&&c.depart?from24(c.depart):{h:7,m:0,ap:''},ob=isoToCairo(c&&c.book_at),bf=ob.t?from24(ob.t):{h:7,m:0,ap:'ص'};
- form(c?'تعديل '+c.name:'إضافة عربة جديدة',[
+function carForm(c,drv){const f=c&&c.depart?from24(c.depart):{h:7,m:0,ap:''},ob=isoToCairo(c&&c.book_at),bf=ob.t?from24(ob.t):{h:7,m:0,ap:'ص'};
+ form(c?(drv?'تعديل بيانات الرحلة':'تعديل '+c.name):'إضافة عربة جديدة',[
   {k:'n',l:'اسم العربة / الرحلة',v:c?c.name:''},
-  {k:'g',l:'المجموعة (القسم)',t:'sel',o:[['','بدون مجموعة'],...GR.map(g=>[g.id,g.name]),['new','+ مجموعة جديدة']],v:c&&c.group_id||''},
-  {k:'g2',l:'اسم المجموعة الجديدة (لو اخترت + مجموعة جديدة)',v:''},
+  ...(drv?[]:[{k:'g',l:'المجموعة (القسم)',t:'sel',o:[['','بدون مجموعة'],...GR.map(g=>[g.id,g.name]),['new','+ مجموعة جديدة']],v:c&&c.group_id||''},
+  {k:'g2',l:'اسم المجموعة الجديدة (لو اخترت + مجموعة جديدة)',v:''}]),
   {k:'cm',l:'نوع العربة',t:'sel',o:[['l','محدودة العدد (مقاعد + احتياطي)'],['u','غير محدودة العدد (بدون احتياطي)']],v:c&&c.capacity==null?'u':'l'},
   {k:'c',l:'عدد المقاعد (للمحدودة فقط)',t:'number',v:c&&c.capacity?c.capacity:14},
   {k:'d',l:'التفاصيل (مثلًا: اسم المدرسة أو الكنيسة أو المكان)',t:'area',v:c&&c.details||''},
@@ -240,12 +251,13 @@ function carForm(c){const f=c&&c.depart?from24(c.depart):{h:7,m:0,ap:''},ob=isoT
   {k:'bh',l:'ساعة فتح الحجز',t:'sel',o:HR,v:bf.h},{k:'bm',l:'الدقيقة',t:'sel',o:MN,v:bf.m},
   {k:'ba',l:'صباحًا / مساءً',t:'sel',o:[['ص','ص (صباحًا)'],['م','م (مساءً)']],v:bf.ap||'ص'},
   {k:'w',l:c?'باسورد سائق جديد (اتركه فاضي للإبقاء على القديم)':'باسورد السائق (اتركه فاضي ويتولّد تلقائي)',t:'text',v:''}],
- async v=>{let g=v.g;if(g==='new'){if((v.g2||'').trim().length<2)return toast('اكتب اسم المجموعة الجديدة');const r=await rpc('staff_add_group',{pw:PW,p_name:v.g2});if(!r)return;g=r.data}
+ async v=>{let g=v.g;if(!drv&&g==='new'){if((v.g2||'').trim().length<2)return toast('اكتب اسم المجموعة الجديدة');const r=await rpc('staff_add_group',{pw:PW,p_name:v.g2});if(!r)return;g=r.data}
   if(!v.n.trim())return toast('اكتب اسم العربة');
-  const a={p_name:v.n,p_group:g?+g:null,p_cap:v.cm==='u'?null:(+v.c||14),p_details:v.d,p_depart:to24(v.h,v.m,v.a),p_dpw:v.w,p_bookat:v.bd?cairoToIso(v.bd,to24(v.bh,v.bm,v.ba)):null};
-  if(c){const r=await rpc('staff_edit_car',{pw:PW,p_id:c.id,...a},'تم حفظ التعديلات');if(r&&v.w.trim())toast('تم حفظ التعديلات وتغيير باسورد السائق')}
-  else{const r=await rpc('staff_add_car',{pw:PW,...a});if(r&&r.data)showCreds(null,r.data.token,r.data.pw||v.w.trim())}})}
-function passForm(x,cid){form(x?'تعديل بيانات الراكب':'إضافة راكب',[{k:'n',l:'الاسم',v:x?x.name:''},{k:'s',l:'محطة الركوب',t:'sel',o:pk(),v:x?(x.stop_id||0):P()[0]?P()[0].id:0},{k:'t',l:'وصف المكان (لو اخترت أخرى)',v:x&&x.pickup_text||''},{k:'d',l:'محطة النزول (اختار أو اكتب)',v:x&&x.drop_name||'',dl:1}],
+  const a={p_name:v.n,p_cap:v.cm==='u'?null:(+v.c||14),p_details:v.d,p_depart:to24(v.h,v.m,v.a),p_dpw:v.w,p_bookat:v.bd?cairoToIso(v.bd,to24(v.bh,v.bm,v.ba)):null};
+  if(c&&drv){await rpc('staff_edit_car_drv',{pw:PW,p_car:c.id,...a},'تم حفظ التعديلات')}
+  else if(c){const r=await rpc('staff_edit_car',{pw:PW,p_id:c.id,p_group:g?+g:null,...a},'تم حفظ التعديلات');if(r&&v.w.trim())toast('تم حفظ التعديلات وتغيير باسورد السائق')}
+  else{const r=await rpc('staff_add_car',{pw:PW,p_group:g?+g:null,...a});if(r&&r.data)showCreds(null,r.data.token,r.data.pw||v.w.trim())}})}
+function passForm(x,cid){const c=curCar(),p0=P(c)[0];form(x?'تعديل بيانات الراكب':'إضافة راكب',[{k:'n',l:'الاسم',v:x?x.name:''},{k:'s',l:'محطة الركوب',t:'sel',o:pk(),v:x?(x.stop_id||0):(p0?p0.id:0)},{k:'t',l:'وصف المكان (لو اخترت أخرى)',v:x&&x.pickup_text||''},{k:'d',l:'محطة النزول (اختار أو اكتب)',v:x&&x.drop_name||'',dl:1}],
  v=>v.n.trim().length>1&&(x?rpc('staff_edit',{pw:PW,p_id:x.id,p_name:v.n,p_stop:+v.s,p_pick:v.t,p_drop:v.d},'تم التعديل'):rpc('staff_add',{pw:PW,p_car:cid,p_name:v.n,p_stop:+v.s,p_pick:v.t,p_drop:v.d},'تمت الإضافة')))}
 
 function renderGrp(){$('gg').innerHTML='<h3 style="margin:0 0 6px">المجموعات (الأقسام)</h3>'+(GR.map(g=>`<div class="row"><div class="t">${esc(g.name)}<small>${CARS.filter(c=>c.group_id===g.id).length} عربة</small></div><div class="a"><button data-m="ren" data-i="${g.id}">تعديل</button><button data-m="del" data-i="${g.id}">✕</button></div></div>`).join('')||'<p class="mut">لا توجد مجموعات</p>')
@@ -256,17 +268,18 @@ $('gg').onclick=async e=>{const b=e.target.closest('button[data-m]');if(!b)retur
  if(b.dataset.m==='ren'){const n=prompt('الاسم الجديد',g.name);if(n&&n.trim().length>1){await rpc('staff_rename_group',{pw:PW,p_id:id,p_name:n},'تم التعديل');renderGrp()}}
  if(b.dataset.m==='del'&&confirm('حذف مجموعة '+g.name+'؟ العربات اللي فيها هتفضل موجودة بدون مجموعة.')){await rpc('staff_delete_group',{pw:PW,p_id:id},'تم الحذف');renderGrp()}};
 
-function fillAfter(){const k=$('ak').value;$('aa').innerHTML='<option value="0">في الآخر</option><option value="-1">في الأول</option>'+(k==='pickup'?P():D()).map(s=>`<option value="${s.id}">بعد: ${esc(s.name)}</option>`).join('')}
-function renderMgr(){const li=l=>l.map(s=>`<div class="row"><div class="t">${esc(s.name)}</div><div class="a"><button data-m="ren" data-i="${s.id}">تعديل</button><button data-m="del" data-i="${s.id}">✕</button></div></div>`).join('');
- $('mg').innerHTML=`<h3 style="margin:0 0 6px">محطات الركوب (خط السير)</h3>${li(P())}<h3 style="margin:16px 0 6px">محطات النزول</h3>${li(D())}<h3 style="margin:16px 0 0">إضافة محطة</h3>
+/* محطات العربة (لكل عربة محطاتها) */
+function fillAfter(c){const k=$('ak').value;$('aa').innerHTML='<option value="0">في الآخر</option><option value="-1">في الأول</option>'+(k==='pickup'?P(c):D(c)).map(s=>`<option value="${s.id}">بعد: ${esc(s.name)}</option>`).join('')}
+function renderMgr(c){const li=l=>l.map(s=>`<div class="row"><div class="t">${esc(s.name)}</div><div class="a"><button data-m="ren" data-i="${s.id}">تعديل</button><button data-m="del" data-i="${s.id}">✕</button></div></div>`).join('')||'<p class="mut sm">لسه مفيش محطات.</p>';
+ $('mg').innerHTML=`<h3 style="margin:0 0 6px">محطات ركوب ${esc(c.name)} (خط السير)</h3>${li(P(c))}<h3 style="margin:16px 0 6px">محطات النزول</h3>${li(D(c))}<h3 style="margin:16px 0 0">إضافة محطة</h3>
  <label>النوع<select id="ak"><option value="pickup">ركوب (في خط السير)</option><option value="drop">نزول</option></select></label><label>الاسم<input id="an"></label><label>مكانها<select id="aa"></select></label>
  <button class="go" id="ab" style="width:100%;margin-top:10px">إضافة المحطة</button>`;
- fillAfter();$('ak').onchange=fillAfter;
- $('ab').onclick=async()=>{const n=$('an').value.trim();if(n.length<2)return toast('اكتب اسم المحطة');const r=await rpc('staff_add_stop',{pw:PW,p_kind:$('ak').value,p_name:n,p_after:+$('aa').value},'تمت إضافة المحطة');if(r)renderMgr()}}
+ fillAfter(c);$('ak').onchange=()=>fillAfter(c);
+ $('ab').onclick=async()=>{const n=$('an').value.trim();if(n.length<2)return toast('اكتب اسم المحطة');const r=await rpc('staff_add_stop',{pw:PW,p_car:c.id,p_kind:$('ak').value,p_name:n,p_after:+$('aa').value},'تمت إضافة المحطة');if(r)renderMgr(curCar()||c)}}
 $('mgx').onclick=()=>$('dlg2').close();
 $('mg').onclick=async e=>{const b=e.target.closest('button[data-m]');if(!b)return;const id=+b.dataset.i,s=ST.find(x=>x.id===id);
- if(b.dataset.m==='ren'){const n=prompt('الاسم الجديد للمحطة',s.name);if(n&&n.trim().length>1){await rpc('staff_rename_stop',{pw:PW,p_id:id,p_name:n},'تم التعديل');renderMgr()}}
- if(b.dataset.m==='del'&&confirm('حذف محطة '+s.name+'؟')){await rpc('staff_delete_stop',{pw:PW,p_id:id},'تم الحذف');renderMgr()}};
+ if(b.dataset.m==='ren'){const n=prompt('الاسم الجديد للمحطة',s.name);if(n&&n.trim().length>1){await rpc('staff_rename_stop',{pw:PW,p_id:id,p_name:n},'تم التعديل');renderMgr(curCar())}}
+ if(b.dataset.m==='del'&&confirm('حذف محطة '+s.name+'؟')){await rpc('staff_delete_stop',{pw:PW,p_id:id},'تم الحذف');renderMgr(curCar())}};
 
 /* ---- الأحداث ---- */
 $('app').onclick=async e=>{const b=e.target.closest('[data-a]');if(!b)return;const a=b.dataset.a,i=+b.dataset.i||0,car=curCar(),cid=car?car.id:0,x=B.find(y=>y.id===i);
@@ -277,12 +290,13 @@ $('app').onclick=async e=>{const b=e.target.closest('[data-a]');if(!b)return;con
  case 'copy':{const c=CARS.find(y=>y.id===i);if(c&&c.token)copy(linkT(c.token));break}
  case 'filt':filt=b.dataset.v;render();break;
  case 'book':doBook();break;
+ case 'bresx':LAST=null;render();break;
  case 'login':{const pw=$('pw').value;const {data}=await sb.rpc('admin_login',{pw});if(!data)return toast('كلمة المرور غير صحيحة');role='admin';PW=pw;ssSet('adm',pw);await load();break}
  case 'dlogin':form('دخول السائق',[{k:'p',l:'باسورد السائق',t:'password',v:''}],async v=>{const t=R()[1];const {data}=await sb.rpc('driver_login',{p_token:t,pw:v.p});if(!data)return toast('الباسورد غير صحيح');role=data;PW=v.p;ssSet(data==='admin'?'adm':'drv:'+t,v.p);await load()});break;
  case 'out':logout();break;
- case 'addcar':carForm(null);break;
+ case 'addcar':carForm(null,false);break;
  case 'grp':renderGrp();$('dlg3').showModal();break;
- case 'stn':renderMgr();$('dlg2').showModal();break;
+ case 'stn':renderMgr(car);$('dlg2').showModal();break;
  case 'pws':form('تغيير باسورد المسؤول',[{k:'a',l:'الباسورد الجديد (4 أحرف على الأقل)',t:'password',v:''}],async v=>{if(!v.a)return;const r=await rpc('staff_set_pw',{pw:PW,newpw:v.a},'تم تغيير الباسورد');if(r){PW=v.a;ssSet('adm',PW)}});break;
  case 'sched':{const ob=isoToCairo(car.book_at),bf=ob.t?from24(ob.t):{h:7,m:0,ap:'ص'};form('تحديد موعد فتح الحجز - '+car.name,[
   {k:'bd',l:'التاريخ',t:'date',v:ob.d||isoToCairo(new Date().toISOString()).d},{k:'bh',l:'الساعة',t:'sel',o:HR,v:bf.h},{k:'bm',l:'الدقيقة',t:'sel',o:MN,v:bf.m},{k:'ba',l:'صباحًا / مساءً',t:'sel',o:[['ص','ص (صباحًا)'],['م','م (مساءً)']],v:bf.ap||'ص'},
@@ -293,8 +307,8 @@ $('app').onclick=async e=>{const b=e.target.closest('[data-a]');if(!b)return;con
  case 'end':confirm('إنهاء رحلة '+car.name+'؟')&&trip('end');break;
  case 'closeb':trip('close');break;
  case 'openb':trip('open');break;
- case 'reset':confirm('تصفير حجوزات '+car.name+'؟ هيتمسح كل حجوزاتها وملاحظاتها')&&confirm('متأكد؟ مفيش رجوع')&&trip('reset');break;
- case 'editcar':carForm(car);break;
+ case 'reset':confirm('تصفير '+car.name+' وبدء رحلة جديدة؟ هيتمسح كل الحجوزات والملاحظات')&&confirm('متأكد؟ مفيش رجوع')&&trip('reset');break;
+ case 'editcar':carForm(car,role!=='admin');break;
  case 'regen':if(confirm('تغيير رابط '+car.name+'؟ الرابط القديم هيبطل يفتح فورًا، وهتبعت الجديد للركاب والسائق (نفس التفاصيل والحجوزات بتفضل زي ما هي).')){const r=await rpc('staff_regen_token',{pw:PW,p_id:cid});if(r)showCreds(car,r.data,null)}break;
  case 'delcar':if(confirm('حذف '+car.name+' نهائيًا مع كل حجوزاتها؟')&&confirm('متأكد؟ الرابط بتاعها هيبطل يفتح ومفيش رجوع')){const r=await rpc('staff_delete_car',{pw:PW,p_id:cid},'تم حذف العربة والرابط بتاعها');if(r)go('admin')}break;
  case 'addp':passForm(null,cid);break;
