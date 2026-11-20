@@ -1,7 +1,7 @@
 /* core.js - الجزء المشترك بين صفحات الراكب والسائق والمسؤول */
 const $=i=>document.getElementById(i),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const sb=(typeof SUPABASE_URL!=='undefined'&&SUPABASE_URL)?supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY):null;
-let B=[],ST=[],CARS=[],GR=[],role=null,PW='',notes={},mine={},prev=null,filt='all',loaded=false,LAST=null,skew=0;
+let B=[],ST=[],CARS=[],GR=[],role=null,PW='',notes={},mine={},prev=null,filt='all',loaded=false,LAST=null,skew=0,CH=[],CHL=0,unreadN=0,PC=null,DEF=null;
 try{mine=JSON.parse(localStorage.getItem('mine2')||'{}')}catch(e){}
 const saveMine=()=>{try{localStorage.setItem('mine2',JSON.stringify(mine))}catch(e){}};
 const dev=(()=>{try{let d=localStorage.getItem('dev1');if(!d){d=[...Array(24)].map(()=>Math.floor(Math.random()*16).toString(16)).join('');localStorage.setItem('dev1',d)}return d}catch(e){return ''}})();
@@ -18,7 +18,7 @@ const capOf=c=>c.capacity==null?Infinity:c.capacity;
 const opened=c=>!c.book_at||Date.now()+skew>=Date.parse(c.book_at);
 async function copy(t,msg){try{await navigator.clipboard.writeText(t);toast(msg||'تم النسخ')}catch(e){prompt('انسخ:',t)}}
 function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display='none',4500)}
-function setNav(items){const n=$('nav'),h=items?items.map(i=>`<a href="${i.h}" class="${i.on?'on':''}"><b>${i.i}</b>${i.l}</a>`).join(''):'';if(setNav.h===h)return;setNav.h=h;n.hidden=!items;n.innerHTML=h}
+function setNav(items){const n=$('nav'),h=items?items.map(i=>`<a href="${i.h}" class="${i.on?'on':''}"><b>${i.i}${i.b?`<span class="bdg">${i.b}</span>`:''}</b>${i.l}</a>`).join(''):'';if(setNav.h===h)return;setNav.h=h;n.hidden=!items;n.innerHTML=h}
 
 /* ---- وقت 12 ساعة (بتوقيت القاهرة) ---- */
 const t12=s=>{if(!s)return'';let[h,m]=s.split(':').map(Number);const ap=h>=12?'م':'ص';h=h%12||12;return h+':'+String(m).padStart(2,'0')+' '+ap};
@@ -51,12 +51,12 @@ async function load(){if(!sb)return;const r=R();
  else{CARS=[];B=[];GR=[];ST=[]}
  const nc=role&&curCar();notes={};
  if(nc){const n=await sb.rpc('staff_notes',{pw:PW,p_car:nc.id});if(n.error){logout();return}n.data.forEach(x=>notes[x.booking_id]=x.note)}
- const old=prev,conf=confIds();loaded=true;
+ const old=prev,conf=confIds();loaded=true;await loadChat();
  if(old){const was=new Set(old.all),oc=new Set(old.conf);const up=B.filter(x=>conf.includes(x.id)&&!oc.has(x.id)&&was.has(x.id));
-  if(up.length)toast('اتأكد حجز '+up.map(x=>x.name).join(' و ')+' بدل المعتذر')}
- prev={all:B.map(x=>x.id),conf};render()}
+  if(up.length){toast('اتأكد حجز '+up.map(x=>x.name).join(' و ')+' بدل المعتذر');if(up.some(x=>x.id in mine))notify('✅ اتأكد حجزك','اتأكد حجزك بدل معتذر','promo')}}
+ carEvents();prev={all:B.map(x=>x.id),conf};render()}
 function start(){if(!sb){render();return}
- window.onhashchange=async()=>{loaded=false;CARS=[];B=[];ST=[];prev=null;LAST=null;render();await auth();await load()};
+ window.onhashchange=async()=>{loaded=false;CARS=[];B=[];ST=[];prev=null;LAST=null;CH=[];CHL=0;unreadN=0;PC=null;loadChat.car=0;updChat.done=false;render();await auth();await load()};
  (async()=>{await auth();await load();setInterval(()=>{if(!document.hidden)load()},5000)})()}
 
 /* ---- مكونات العرض المشتركة ---- */
@@ -84,6 +84,60 @@ function sumHtml(c,conf){const oth=conf.filter(x=>!x.stop_id);
  return P(c).map((p,i)=>{const l=conf.filter(x=>x.stop_id===p.id);return `<details ${l.length?'open':''}><summary>${i+1}. ${esc(p.name)} - ${l.length} راكب</summary>${l.map(x=>`<div>${esc(x.name)} ← ${esc(x.drop_name||'—')}${notes[x.id]?' - 📝 '+esc(notes[x.id]):''}</div>`).join('')||'<div class="mut">لا أحد</div>'}</details>`}).join('')
  +(oth.length?`<details open><summary>📍 أماكن أخرى (بالوصف) - ${oth.length} راكب</summary>${oth.map(x=>`<div>${esc(x.name)} - ${esc(x.pickup_text||'')} ← ${esc(x.drop_name||'—')}${notes[x.id]?' - 📝 '+esc(notes[x.id]):''}</div>`).join('')}</details>`:'')}
 const notFound=()=>`<div class="card" style="text-align:center;margin-top:40px"><h2>الرابط ده مش موجود</h2><p class="mut">الرابط غير صحيح أو اتحذف أو اتغيّر. اطلب رابط جديد من المسؤول.</p></div>`;
+
+
+/* ---- الشات الجماعي ---- */
+const chatToken=()=>APP==='admin'?(curCar()||{}).token:R()[1];
+const onChat=()=>{const r=R();return APP==='admin'?(r[0]==='car'&&r[2]==='chat'):r[2]==='chat'};
+const getSeen=c=>{try{return +localStorage.getItem('seen:'+c.id)||0}catch(e){return 0}},setSeen=c=>{try{localStorage.setItem('seen:'+c.id,CHL)}catch(e){}};
+const ownMsg=m=>m.mine||(role&&m.role===role);
+async function loadChat(){const t=chatToken(),c=curCar();if(!sb||!t||!c){CH=[];CHL=0;unreadN=0;return}
+ if(loadChat.car!==c.id){loadChat.car=c.id;CH=[];CHL=0}
+ const {data,error}=await sb.rpc('chat_list',{p_token:t,p_after:CHL,p_dev:dev});
+ if(!error&&data&&data.length){const fresh=CHL>0;CH=CH.concat(data).slice(-300);CHL=CH[CH.length-1].id;
+  if(fresh){const o=data.filter(m=>!ownMsg(m));if(o.length&&(document.hidden||!onChat())){const m=o[o.length-1];notify('💬 '+m.name,m.body,'chat')}}}
+ if(onChat()&&!document.hidden)setSeen(c);
+ unreadN=CH.filter(m=>m.id>getSeen(c)&&!ownMsg(m)).length}
+function chatSkeleton(){let nmv='';try{nmv=localStorage.getItem('chatname')||''}catch(e){}
+ return `<div class="card"><div class="top"><b>💬 شات العربة</b><span class="mut sm">كل اللي في العربة دي بيشوفوا الرسايل</span></div><div id="cm" class="msgs"></div>
+ <div class="cin">${role?'':`<input id="cn" maxlength="30" placeholder="اسمك (هيظهر في المحادثة)" value="${esc(nmv)}">`}<div class="crow"><input id="ci" maxlength="500" placeholder="اكتب رسالتك…" autocomplete="off"><button class="go" data-a="csend">إرسال</button></div></div></div>`}
+function updChat(){const box=$('cm');if(!box)return;const c=curCar();
+ const near=!box.scrollHeight||box.scrollHeight-box.scrollTop-box.clientHeight<90;
+ box.innerHTML=CH.length?CH.map(m=>{const own=ownMsg(m);return `<div class="msg ${own?'me':''}"><div class="mb ${m.role!=='passenger'?'st':''}"><div class="mn">${m.role==='driver'?'🚐 ':m.role==='admin'?'🛡️ ':''}${esc(m.name)}</div><div class="mt">${esc(m.body)}</div><div class="md">${bt(m.created_at)}${role?` <button data-a="cdel" data-i="${m.id}" aria-label="حذف">✕</button>`:''}</div></div></div>`}).join(''):'<p class="mut" style="text-align:center;margin-top:30px">مفيش رسايل لسه. ابدأ المحادثة 👋</p>';
+ if(near||!updChat.done){box.scrollTop=box.scrollHeight;updChat.done=true}
+ if(c&&!document.hidden){setSeen(c);unreadN=0}}
+async function csend(){const c=curCar(),inp=$('ci');if(!c||!inp)return;const body=inp.value.trim();if(!body)return;
+ if(role){const {error}=await sb.rpc('chat_send_staff',{pw:PW,p_car:c.id,p_body:body});if(error){toast(error.message);if(error.message.includes('كلمة المرور غير صحيحة'))logout();return}}
+ else{const nmEl=$('cn'),name=(nmEl?nmEl.value:'').trim();if(name.length<2)return toast('اكتب اسمك الأول عشان يظهر في المحادثة');
+  try{localStorage.setItem('chatname',name)}catch(e){}
+  const {error}=await sb.rpc('chat_send',{p_token:chatToken(),p_name:name,p_body:body,p_dev:dev});if(error)return toast(error.message)}
+ inp.value='';await loadChat();updChat()}
+if($('app').addEventListener)$('app').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='ci'){e.preventDefault();csend()}});
+
+/* ---- تنبيهات (بتشتغل والصفحة مفتوحة في الخلفية) + تثبيت التطبيق ---- */
+function notify(title,body,tag,force){try{if(typeof Notification==='undefined'||Notification.permission!=='granted'||localStorage.getItem('notif')!=='1')return;if(!force&&!document.hidden)return;
+ if(navigator.serviceWorker&&navigator.serviceWorker.ready)navigator.serviceWorker.ready.then(r=>r.showNotification(title,{body,tag,icon:'icon-192.png',badge:'icon-192.png',dir:'rtl',lang:'ar'})).catch(()=>{try{new Notification(title,{body,tag})}catch(e){}});
+ else new Notification(title,{body,tag})}catch(e){}}
+function carEvents(){const c=APP==='passenger'?CARS[0]:null;if(!c){PC=null;return}
+ const op=c.status==='open'&&opened(c);
+ if(PC&&PC.id===c.id){
+  if(c.status==='going'&&PC.status!=='going')notify('🚐 بدأت الرحلة',c.name,'st');
+  else if(c.status==='going'&&c.cur!==PC.cur){const s=P(c).find(x=>x.ord===c.cur);notify('📍 العربة وصلت '+(s?s.name:'المحطة التالية'),c.name,'cur')}
+  if(op&&!PC.op)notify('✅ الحجز فتح!','احجز مقعدك دلوقتي - '+c.name,'open');
+  if(c.status==='done'&&PC.status!=='done')notify('🏁 انتهت الرحلة',c.name,'end')}
+ PC={id:c.id,status:c.status,cur:c.cur,op}}
+const standalone=()=>{try{return (window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone}catch(e){return false}};
+const isIOS=()=>/iphone|ipad|ipod/i.test((navigator.userAgent||''));
+function hx(){const h=$('hx');if(!h)return;let s='';
+ if(!standalone()&&(DEF||isIOS()))s+='<button data-x="inst" style="padding:5px 10px;font-size:13px">📲 تثبيت</button>';
+ if(typeof Notification!=='undefined'&&Notification.permission==='default')s+='<button data-x="ntf" style="padding:5px 10px;font-size:13px;margin-inline-start:6px">🔔 تنبيهات</button>';
+ h.innerHTML=s}
+if($('hx'))$('hx').onclick=async e=>{const b=e.target.closest('[data-x]');if(!b)return;
+ if(b.dataset.x==='inst'){if(DEF){DEF.prompt();await DEF.userChoice;DEF=null;hx()}else alert('على الآيفون: دوس زر المشاركة (⬆️) في سفاري، واختار "إضافة إلى الشاشة الرئيسية"، ثم "إضافة".')}
+ else{const p=await Notification.requestPermission();if(p==='granted'){try{localStorage.setItem('notif','1')}catch(er){}toast('تم تفعيل التنبيهات');notify('🔔 التنبيهات شغالة','هتوصلك تنبيهات الرحلة والرسايل لما الصفحة تفضل مفتوحة في الخلفية','t',true)}else toast('التنبيهات اتمنعت. فعّلها من إعدادات المتصفح للموقع.');hx()}};
+if(typeof window.addEventListener==='function'){window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();DEF=e;hx()});window.addEventListener('appinstalled',()=>{DEF=null;hx()});
+ if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}
+hx();
 
 /* ---- شاشات التحكم المشتركة (سائق + مسؤول) ---- */
 function carHead(c,extra){const g=grp(c);return `<div class="hd"><div class="top"><h1>${esc(c.name)} ${g?`<span class="tag">${esc(g.name)}</span>`:''}</h1><span class="stt ${c.status}">${STL[c.status]}</span></div>${c.details?`<p class="mut" style="margin:4px 0">${esc(c.details)}</p>`:''}<div class="mut sm">🚌 الرحلات السابقة: <b>${c.trips_done||0}</b>${c.capacity==null?' - غير محدودة العدد':' - '+c.capacity+' مقعد'}</div>${extra||''}</div>`}
@@ -115,7 +169,7 @@ function carFields(c,drv){const f=c&&c.depart?from24(c.depart):{h:7,m:0,ap:''},o
   {k:'g2',l:'اسم المجموعة الجديدة (لو اخترت + مجموعة جديدة)',v:''}]),
   {k:'cm',l:'نوع العربة',t:'sel',o:[['l','محدودة العدد (مقاعد + احتياطي)'],['u','غير محدودة العدد (بدون احتياطي)']],v:c&&c.capacity==null?'u':'l'},
   {k:'c',l:'عدد المقاعد (للمحدودة فقط)',t:'number',v:c&&c.capacity?c.capacity:14},
-  {k:'d',l:'التفاصيل (مثلًا: اسم المدرسة أو مصنع أو المكان)',t:'area',v:c&&c.details||''},
+  {k:'d',l:'التفاصيل (مثلًا: اسم المدرسة أو الكنيسة أو المكان)',t:'area',v:c&&c.details||''},
   {k:'h',l:'موعد انطلاق الرحلة - الساعة',t:'sel',o:HR,v:f.h},{k:'m',l:'الدقيقة',t:'sel',o:MN,v:f.m},
   {k:'a',l:'صباحًا / مساءً',t:'sel',o:[['','بدون موعد'],['ص','ص (صباحًا)'],['م','م (مساءً)']],v:f.ap},
   {k:'bd',l:'⏳ فتح الحجز تلقائيًا - التاريخ (اتركه فاضي = الحجز مفتوح فورًا)',t:'date',v:ob.d},
@@ -156,6 +210,8 @@ async function onAct(e){const b=e.target.closest('[data-a]');if(!b)return;const 
   {k:'bd',l:'التاريخ',t:'date',v:ob.d||isoToCairo(new Date().toISOString()).d},{k:'bh',l:'الساعة',t:'sel',o:HR,v:bf.h},{k:'bm',l:'الدقيقة',t:'sel',o:MN,v:bf.m},{k:'ba',l:'صباحًا / مساءً',t:'sel',o:[['ص','ص (صباحًا)'],['م','م (مساءً)']],v:bf.ap||'ص'},
   {k:'x',l:'الإجراء',t:'sel',o:[['s','حفظ الموعد - الحجز يفتح تلقائيًا فيه'],['c','إلغاء الجدولة - الحجز يفتح فورًا']],v:'s'}],
   v=>{const off=v.x==='c'||!v.bd;rpc('staff_set_bookat',{pw:PW,p_car:cid,p_bookat:off?null:cairoToIso(v.bd,to24(v.bh,v.bm,v.ba))},off?'تم إلغاء الجدولة':'تم حفظ موعد فتح الحجز')});break}
+ case 'csend':await csend();break;
+ case 'cdel':if(confirm('حذف الرسالة؟')){const r=await sb.rpc('chat_delete',{pw:PW,p_id:i});if(r.error)toast(r.error.message);else{CH=CH.filter(m=>m.id!==i);updChat()}}break;
  case 'addp':passForm(null,cid);break;
  case 'edit':passForm(x,cid);break;
  case 'del':confirm('حذف '+x.name+'؟')&&rpc('staff_delete',{pw:PW,p_id:i},'تم الحذف');break;

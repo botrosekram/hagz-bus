@@ -1,6 +1,6 @@
 /* admin.js - لوحة المسؤول */
 const ADM=[['home','🏠','الرئيسية','#/'],['groups','🗂️','المجموعات','#/groups'],['settings','⚙️','الإعدادات','#/settings']];
-const CT=[['control','🎛️','تحكم'],['riders','👥','ركاب'],['stops','🚏','محطات'],['settings','⚙️','إعدادات'],['link','🔗','الرابط']];
+const CT=[['control','🎛️','تحكم'],['riders','👥','ركاب'],['stops','🚏','محطات'],['chat','💬','شات'],['settings','⚙️','إعدادات'],['link','🔗','الرابط']];
 function carCard(c){const bs=carB(c),cp=capOf(c),conf=Math.min(bs.length,cp),w=Math.max(0,bs.length-cp),p=cp===Infinity?0:Math.round(conf/cp*100),g=grp(c),cs=P(c).find(s=>s.ord===c.cur),wait=c.status==='open'&&!opened(c);
  return `<article class="cc ${c.status}" data-a="opencar" data-i="${c.id}" tabindex="0" role="button"><div class="ct"><b>${esc(c.name)}</b>${g?`<span class="tag">${esc(g.name)}</span>`:''}</div>
  ${c.details?`<div class="mut sm">${esc(c.details)}</div>`:''}${cp===Infinity?'':`<div class="bar"><i style="width:${p}%"></i></div>`}
@@ -26,10 +26,10 @@ function render(){const r=R(),a=$('app');a.className='w'+(role?' wide':'');
  if(!loaded){if(render.k!=='ld'){render.k='ld';a.innerHTML='<p class="mut">جارٍ التحميل…</p>'}setNav(null);return}
  if(r[0]==='car'){const c=curCar();if(!c){render.k='nf';a.innerHTML=notFound()+'<div style="text-align:center"><button data-a="go" data-p="">← الرئيسية</button></div>';setNav(null);return}
   const tab=CT.some(t=>t[0]===r[2])?r[2]:'control',key='car/'+c.id+'/'+tab;
-  if(render.k!==key){render.k=key;updStops.k='';a.innerHTML='<div id="hd"></div>'+(tab==='stops'?stopsSkeleton():tab==='settings'?settingsSkeleton(c):'<div id="tab"></div>');window.scrollTo(0,0)}
+  if(render.k!==key){render.k=key;updStops.k='';a.innerHTML='<div id="hd"></div>'+(tab==='stops'?stopsSkeleton():tab==='chat'?chatSkeleton():tab==='settings'?settingsSkeleton(c):'<div id="tab"></div>');window.scrollTo(0,0)}
   $('hd').innerHTML=carHead(c,'<div style="margin-top:8px"><button data-a="go" data-p="">← لوحة التحكم</button></div>');
-  if(tab==='control')$('tab').innerHTML=tabControl(c);else if(tab==='riders')$('tab').innerHTML=tabRiders(c);else if(tab==='link')$('tab').innerHTML=tabLink(c);else if(tab==='stops')updStops(c);
-  setNav(CT.map(t=>({h:`#/car/${c.id}/${t[0]}`,i:t[1],l:t[2],on:t[0]===tab})));return}
+  if(tab==='control')$('tab').innerHTML=tabControl(c);else if(tab==='riders')$('tab').innerHTML=tabRiders(c);else if(tab==='link')$('tab').innerHTML=tabLink(c);else if(tab==='stops')updStops(c);else if(tab==='chat')updChat();
+  setNav(CT.map(t=>({h:`#/car/${c.id}/${t[0]}`,i:t[1],l:t[2],b:t[0]==='chat'?unreadN:0,on:t[0]===tab})));return}
  const tab=r[0]==='groups'?'groups':r[0]==='settings'?'settings':'home';
  if(render.k!==tab){render.k=tab;window.scrollTo(0,0);
   a.innerHTML=tab==='home'?'<div id="tab"></div>':tab==='groups'?'<div class="hd"><h1>المجموعات</h1></div><div id="gl"></div><div class="card"><b>إضافة مجموعة</b><label>الاسم<input id="gn" placeholder="مثلًا: جامعات"></label><button class="go" data-a="gadd" style="width:100%;margin-top:10px">إضافة</button></div>'
