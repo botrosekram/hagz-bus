@@ -2,4 +2,4 @@
 const SUPABASE_URL = 'https://pabvyydctwwufmiecmzc.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_b6mILrA24y6WDle98R-UHw_mWtdJw9o';
 // مفتاح الإشعارات العام (VAPID).
-const VAPID_PUBLIC = 'BHBnBGqw_-4BJuoW05ZalftLj3duGGzPA-PLvALWZjqZqtY51WPiH9V-dy-CZXkXnQVNDQhXGURbPB_J2lRGNbs';
+const VAPID_PUBLIC = 'BL8V6VO7JkuPwLAgGsK1nc90Pgciq4EZxdndEWOmBEz5E5G2P1cPklPsjk6iKyHgvTfGCwTryXAjz8jn2x5eOok';
