@@ -46,7 +46,7 @@ async function doBook(){const c=CARS[0];if(!c)return;if(c.status!=='open'||!open
  if(!sv)return toast('اختار محطة الركوب');
  if(sv==='other'&&pt.length<3)return toast('اكتب وصف مكانك (الشارع / العمارة)');if(drop.length<2)return toast('اختار محطة النزول أو اكتبها');
  const r=await rpc('book',{p_token:R()[1],p_name:n,p_stop:sv==='other'?0:+sv,p_pick:sv==='other'?pt:'',p_drop:drop,p_dev:dev});if(!r)return;
- mine[r.data.id]={s:r.data.secret,n:''};saveMine();try{if(!localStorage.getItem('chatname'))localStorage.setItem('chatname',n)}catch(e){}$('nm').value='';$('pko').value='';$('dro').value='';
+ mine[r.data.id]={s:r.data.secret,n:''};saveMine();loadChat.me=0;$('nm').value='';$('pko').value='';$('dro').value='';
  const cc=CARS[0]||c,pos=carB(cc).findIndex(x=>x.id===r.data.id)+1,cp=capOf(cc);
  LAST={car:cc.id,name:n,pos:pos<=cp?'رقمك '+pos+' (مؤكد)':'احتياطي رقم '+(pos-cp),time:bt(r.data.created_at,'ms')};render();toast(pos<=cp?`تم حجزك، رقمك ${pos}`:`العربة مكتملة، انت احتياطي رقم ${pos-cp}`)}
 function pageAct(a){if(a==='book')return doBook();if(a==='bresx'){LAST=null;render()}}
