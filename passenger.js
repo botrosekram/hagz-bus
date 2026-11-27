@@ -9,7 +9,7 @@ function fillSel(c){const k=JSON.stringify(ST.filter(s=>s.car_id===c.id));if(fil
 function render(){const r=R(),a=$('app');
  if(!sb){a.innerHTML='<div class="card">الصفحة لسه مش متوصلة بقاعدة البيانات. عدّل ملف config.js.</div>';setNav(null);return}
  if(r[0]!=='car'||!r[1]){let lc=null;try{lc=localStorage.getItem('lastCar')}catch(e){}if(lc&&!r.length){go('car/'+lc);return}
- if(render.k!=='home'){render.k='home';a.innerHTML='<div class="card" style="text-align:center;margin-top:40px"><h1>🚐 حجز العربة</h1><p class="mut">للحجز، ادخل من الرابط الخاص بعربتك اللي بعتهولك السائق أو المسؤول.</p></div>'}setNav(null);return}
+ if(render.k!=='home'){render.k='home';a.innerHTML='<div class="card" style="text-align:center;margin-top:40px"><h1>🚐 حجز العربة</h1><p class="mut">للحجز، ادخل من الرابط اللي بعتهولك السائق أو المسؤول، أو الصق الرابط (أو الكود) هنا:</p><input id="lk" placeholder="الصق رابط العربة هنا" style="direction:ltr" autocomplete="off"><button class="go" data-a="openlink" style="width:100%;margin-top:10px">فتح العربة</button></div>'}setNav(null);return}
  if(!loaded){if(render.k!=='ld'){render.k='ld';a.innerHTML='<p class="mut">جارٍ التحميل…</p>'}setNav(null);return}
  const c=CARS[0];if(!c){render.k='nf';try{localStorage.removeItem('lastCar')}catch(e){}a.innerHTML=notFound();setNav(null);return}
  try{localStorage.setItem('lastCar',r[1])}catch(e){}
@@ -49,5 +49,5 @@ async function doBook(){const c=CARS[0];if(!c)return;if(c.status!=='open'||!open
  mine[r.data.id]={s:r.data.secret,n:''};saveMine();loadChat.me=0;$('nm').value='';$('pko').value='';$('dro').value='';
  const cc=CARS[0]||c,pos=carB(cc).findIndex(x=>x.id===r.data.id)+1,cp=capOf(cc);
  LAST={car:cc.id,name:n,pos:pos<=cp?'رقمك '+pos+' (مؤكد)':'احتياطي رقم '+(pos-cp),time:bt(r.data.created_at,'ms')};render();toast(pos<=cp?`تم حجزك، رقمك ${pos}`:`العربة مكتملة، انت احتياطي رقم ${pos-cp}`)}
-function pageAct(a){if(a==='book')return doBook();if(a==='bresx'){LAST=null;render()}}
+function pageAct(a){if(a==='openlink'){const m=(($('lk')||{}).value||'').match(/[0-9a-f]{24}/i);if(!m)return toast('الرابط أو الكود غير صحيح');return go('car/'+m[0].toLowerCase())}if(a==='book')return doBook();if(a==='bresx'){LAST=null;render()}}
 start();
