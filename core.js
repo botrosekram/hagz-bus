@@ -148,6 +148,7 @@ const pushOn=()=>typeof VAPID_PUBLIC!=='undefined'&&!!VAPID_PUBLIC;
 const b64u=s=>{const r=atob((s+'='.repeat((4-s.length%4)%4)).replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from([...r].map(c=>c.charCodeAt(0)))};
 async function subscribePush(){try{const r=R();if(APP==='admin'||r[0]!=='car'||!r[1]||!pushOn()||!('serviceWorker' in navigator)||!('PushManager' in window)||typeof Notification==='undefined'||Notification.permission!=='granted')return false;
  const reg=await navigator.serviceWorker.ready;let sub=await reg.pushManager.getSubscription();
+ if(sub){const cur=sub.options&&sub.options.applicationServerKey,want=b64u(VAPID_PUBLIC);if(cur){const x=new Uint8Array(cur);if(x.length!==want.length||x.some((v,i)=>v!==want[i])){await sub.unsubscribe();sub=null}}}
  if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(VAPID_PUBLIC)});
  const j=sub.toJSON(),{error}=await sb.rpc('push_save',{p_token:r[1],p_dev:dev,p_endpoint:j.endpoint,p_p256dh:j.keys.p256dh,p_auth:j.keys.auth,p_role:APP==='driver'?'driver':'passenger'});
  if(error)return false;pushActive=true;return true}catch(e){return false}}
