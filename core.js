@@ -64,7 +64,7 @@ function start(){if(!sb){render();return}
 
 /* ---- مكونات العرض المشتركة ---- */
 const banner=c=>{const dp=c.depart?' - موعد الانطلاق '+t12(c.depart):'',cs=P(c).find(s=>s.ord===c.cur);
- return c.status==='open'?(opened(c)?'الحجز مفتوح - الرحلة لم تبدأ بعد'+dp:'⏳ الحجز لسه مفتحش - هيفتح '+bt(c.book_at)+dp):c.status==='closed'?'الحجز مقفول'+dp:c.status==='going'?'السائق بدأ الرحلة - العربة دلوقتي عند: '+(cs?cs.name:'—')+dp:'انتهت الرحلة'};
+ return c.status==='open'?(opened(c)?'الحجز مفتوح - الرحلة لم تبدأ بعد'+dp:'⏳ الحجز لسه مفتحش - هيفتح '+bt(c.book_at)+dp):c.status==='closed'?'الحجز مقفول'+dp:c.status==='going'?'السائق بدأ الرحلة - العربة دلوقتي عند: '+(cs?cs.name:'—')+(P(c).find(s=>s.ord>c.cur)?' - وداخلة على: '+P(c).find(s=>s.ord>c.cur).name:' - دي آخر محطة')+dp:'انتهت الرحلة'};
 const banHtml=c=>`<div class="ban${c.status==='going'?' g':''}" aria-live="polite">${esc(banner(c))}</div>`;
 function metroHtml(c,conf){const PS=P(c),going=c.status==='going'||c.status==='done';
  if(!PS.length)return '<p class="mut">لسه مفيش محطات في خط السير.'+(role?' ضيفها من تبويب المحطات.':'')+'</p>';
@@ -127,7 +127,7 @@ function carEvents(){const c=APP==='passenger'?CARS[0]:null;if(!c){PC=null;retur
  const op=c.status==='open'&&opened(c);
  if(PC&&PC.id===c.id){
   if(c.status==='going'&&PC.status!=='going')notify('🚐 بدأت الرحلة',c.name,'st');
-  else if(c.status==='going'&&c.cur!==PC.cur){const s=P(c).find(x=>x.ord===c.cur);notify('📍 العربة وصلت '+(s?s.name:'المحطة التالية'),c.name,'cur')}
+  else if(c.status==='going'&&c.cur!==PC.cur){const s=P(c).find(x=>x.ord===c.cur);{const nx=P(c).find(x=>x.ord>c.cur);notify('📍 العربة عند «'+(s?s.name:'؟')+'»',nx?'داخلة بعدها على «'+nx.name+'»':'دي آخر محطة','cur')}}
   if(op&&!PC.op)notify('✅ الحجز فتح!','احجز مقعدك دلوقتي - '+c.name,'open');
   if(c.status==='done'&&PC.status!=='done')notify('🏁 انتهت الرحلة',c.name,'end')}
  PC={id:c.id,status:c.status,cur:c.cur,op}}
