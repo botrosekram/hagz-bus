@@ -9,16 +9,16 @@
  "dir": "rtl",
  "lang": "ar",
  "background_color": "#F4F6F3",
- "theme_color": "#0F2A2E",
+ "theme_color": "#F5B335",
  "icons": [
   {
-   "src": "icon-192.png",
+   "src": "icon-admin-192.png",
    "sizes": "192x192",
    "type": "image/png",
    "purpose": "any maskable"
   },
   {
-   "src": "icon-512.png",
+   "src": "icon-admin-512.png",
    "sizes": "512x512",
    "type": "image/png",
    "purpose": "any maskable"

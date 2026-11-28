@@ -36,7 +36,8 @@ const cairoToIso=(d,t)=>{const g=new Date(d+'T'+t+':00Z'),p=cz(g);return new Dat
 const isoToCairo=iso=>{if(!iso)return{d:'',t:''};const p=cz(iso);return{d:p.year+'-'+p.month+'-'+p.day,t:p.hour+':'+p.minute}};
 
 /* ---- الدخول والبيانات ---- */
-async function auth(){const r=R();role=null;PW='';
+async function auth(){await authCore();if(typeof afterAuth==='function')await afterAuth()}
+async function authCore(){const r=R();role=null;PW='';
  if(APP==='driver'&&r[0]==='car'&&r[1]){for(const pw of [ss('drv:'+r[1]),ss('adm')]){if(!pw)continue;const {data}=await sb.rpc('driver_login',{p_token:r[1],pw});if(data){role=data;PW=pw;return}}}
  else if(APP==='admin'){const pw=ss('adm');if(pw){const {data}=await sb.rpc('admin_login',{pw});if(data){role='admin';PW=pw}}}}
 function logout(){const r=R();if(role==='admin')ssDel('adm');if(APP==='driver'&&r[1])ssDel('drv:'+r[1]);role=null;PW='';notes={};load()}
@@ -46,8 +47,8 @@ async function rpc(fn,args,ok){const {data,error}=await sb.rpc(fn,args);
 const confIds=()=>CARS.flatMap(c=>carB(c).slice(0,capOf(c)).map(x=>x.id));
 async function load(){if(!sb)return;const r=R();
  if(APP==='admin'){if(role==='admin'){const {data,error}=await sb.rpc('admin_data',{pw:PW});if(error){logout();return}CARS=data.cars;GR=data.groups;B=data.bookings;ST=data.stops;skew=Date.parse(data.now)-Date.now()}else{CARS=[];B=[];GR=[];ST=[]}}
- else if(r[0]==='car'&&r[1]){const {data,error}=await sb.rpc('car_view',{p_token:r[1]});if(error){toast('تعذر الاتصال: '+error.message);return}
-  CARS=data?[data.car]:[];B=data?data.bookings:[];ST=data?data.stops:[];GR=[];if(data)skew=Date.parse(data.now)-Date.now()}
+ else if(r[0]==='car'&&r[1]){const t0=Date.now(),{data,error}=await sb.rpc('car_view',{p_token:r[1]}),t1=Date.now();if(error){toast('تعذر الاتصال: '+error.message);return}
+  CARS=data?[data.car]:[];B=data?data.bookings:[];ST=data?data.stops:[];GR=[];if(data)skew=Date.parse(data.now)-(t0+t1)/2}
  else{CARS=[];B=[];GR=[];ST=[]}
  const nc=role&&curCar();notes={};
  if(nc){const n=await sb.rpc('staff_notes',{pw:PW,p_car:nc.id});if(n.error){logout();return}n.data.forEach(x=>notes[x.booking_id]=x.note)}
@@ -112,7 +113,7 @@ function updChat(){const box=$('cm');if(!box)return;const c=curCar();
  if(c&&!document.hidden){setSeen(c);unreadN=0}}
 async function csend(){const c=curCar(),inp=$('ci');if(!c||!inp)return;const body=inp.value.trim();if(!body)return;
  if(role){const {error}=await sb.rpc('chat_send_staff',{pw:PW,p_car:c.id,p_body:body});if(error){toast(error.message);if(error.message.includes('كلمة المرور غير صحيحة'))logout();return}}
- else{const nmEl=$('cn'),name=CHN||(nmEl?nmEl.value:'').trim();if(name.length<2)return toast('اكتب اسمك الأول عشان يظهر في المحادثة');
+ else{const nmEl=$('cn'),name=CHN||(typeof PN==='string'?PN:'')||(nmEl?nmEl.value:'').trim();if(name.length<2)return toast('اكتب اسمك الأول عشان يظهر في المحادثة');
   if(!CHN&&!confirm('اسمك في الشات هيبقى «'+name+'» وده مش هينفع تغيره بعد كده على الجهاز ده. تكمل؟'))return;
   const {data,error}=await sb.rpc('chat_send',{p_token:chatToken(),p_name:CHN?'':name,p_body:body,p_dev:dev});if(error)return toast(error.message);if(data&&data.name)CHN=data.name}
  inp.value='';await loadChat();updChat()}

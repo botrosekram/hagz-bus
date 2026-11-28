@@ -1,6 +1,6 @@
 /* sw.js - يخلي الموقع يتثبت كتطبيق ويفتح حتى لو النت ضعيف، ويعرض التنبيهات */
-const V='hagz-v5';
-const ASSETS=['./','index.html','driver.html','admin.html','style.css?v=5','core.js?v=5','passenger.js?v=5','driver.js?v=5','admin.js?v=5','config.js?v=5','icon-192.png','icon-512.png'];
+const V='hagz-v6';
+const ASSETS=['./','index.html','driver.html','admin.html','style.css?v=6','core.js?v=6','passenger.js?v=6','driver.js?v=6','admin.js?v=6','config.js?v=6','icon-192.png','icon-512.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(ASSETS)).catch(()=>{}));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==V).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
 self.addEventListener('fetch',e=>{const r=e.request;if(r.method!=='GET')return;const u=new URL(r.url);if(u.origin!==location.origin)return;
